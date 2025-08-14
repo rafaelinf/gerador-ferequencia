@@ -36,6 +36,17 @@
                window.innerWidth <= 768;
       };
 
+      // Função para detectar iOS especificamente
+      const isIOS = () => {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      };
+
+      // Função para detectar Android
+      const isAndroid = () => {
+        return /Android/.test(navigator.userAgent);
+      };
+
     const DEFAULT_VOLUME = 0.5;
     const DEFAULT_ISOCHRONIC_SETTINGS = { carrierFreq: 136.1, pulseFreq: 7.83 };
     const DEFAULT_BINAURAL_SETTINGS = { baseFreq: 100, beatFreq: 10 };
@@ -156,12 +167,20 @@
         if (!audioContextRef.current) {
           try {
             // Criar AudioContext com fallback para navegadores mais antigos
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) {
+              throw new Error('Web Audio API não suportada neste navegador');
+            }
+            
+            audioContextRef.current = new AudioContextClass();
             masterGainRef.current = audioContextRef.current.createGain();
             masterGainRef.current.connect(audioContextRef.current.destination);
             
             // Log para debug
             console.log('✅ AudioContext criado:', audioContextRef.current.state);
+            console.log('📱 Dispositivo:', isMobileDevice() ? 'Móvel' : 'Desktop');
+            console.log('🍎 iOS:', isIOS() ? 'Sim' : 'Não');
+            console.log('🤖 Android:', isAndroid() ? 'Sim' : 'Não');
           } catch (error) {
             console.error('❌ Erro ao criar AudioContext:', error);
             throw new Error('Não foi possível inicializar o sistema de áudio');
@@ -191,6 +210,22 @@
               // Forçar o contexto a funcionar
               await audioContextRef.current.resume();
               console.log('✅ AudioContext forçado a funcionar:', audioContextRef.current.state);
+              
+              // Se ainda não estiver rodando, tentar criar um oscilador temporário
+              if (audioContextRef.current.state !== 'running') {
+                console.log('🔄 Tentando ativar com oscilador temporário...');
+                const tempOsc = audioContextRef.current.createOscillator();
+                const tempGain = audioContextRef.current.createGain();
+                tempGain.gain.setValueAtTime(0.001, 0); // Volume muito baixo
+                tempOsc.connect(tempGain);
+                tempGain.connect(audioContextRef.current.destination);
+                tempOsc.start(0);
+                tempOsc.stop(0.5);
+                
+                // Aguardar um pouco
+                await new Promise(resolve => setTimeout(resolve, 100));
+                console.log('✅ Estado após oscilador temporário:', audioContextRef.current.state);
+              }
             } catch (forceError) {
               console.error('❌ Falha ao forçar AudioContext:', forceError);
             }
@@ -316,10 +351,14 @@
           
           // Em dispositivos móveis, mostrar mensagem específica
           if (isMobileDevice()) {
+            console.log('📱 Erro em dispositivo móvel:', error.message);
+            
             if (error.message.includes('sistema de áudio')) {
-              alert('❌ Sistema de áudio não ativado!\n\n📱 Para dispositivos móveis:\n1. Clique no botão "🔊 Ativar Sistema de Áudio"\n2. Aguarde a confirmação\n3. Tente reproduzir novamente');
+              alert('❌ Sistema de áudio não ativado!\n\n📱 Para dispositivos móveis:\n1. Clique no botão "🔊 Ativar Sistema de Áudio"\n2. Aguarde a confirmação\n3. Tente reproduzir novamente\n\n💡 Dica: Em iOS, pode ser necessário tocar na tela primeiro');
+            } else if (error.message.includes('Web Audio API')) {
+              alert('❌ Web Audio API não suportada!\n\n📱 Este navegador não suporta reprodução de áudio.\n\n🔧 Tente usar:\n• Chrome (Android)\n• Safari (iOS)\n• Firefox (Android)');
             } else {
-              alert('❌ Erro ao reproduzir áudio no celular!\n\n🔧 Soluções:\n• Verifique se o volume está ligado\n• Tente ativar o sistema de áudio novamente\n• Recarregue a página se necessário');
+              alert('❌ Erro ao reproduzir áudio no celular!\n\n🔧 Soluções:\n• Verifique se o volume está ligado\n• Tente ativar o sistema de áudio novamente\n• Recarregue a página se necessário\n• Verifique as permissões do navegador');
             }
           } else {
             alert('❌ Erro ao reproduzir áudio: ' + error.message);
@@ -691,6 +730,19 @@
           console.log('User Agent:', navigator.userAgent);
           console.log('Touch Points:', navigator.maxTouchPoints);
           console.log('Largura da tela:', window.innerWidth);
+          console.log('🍎 iOS:', isIOS() ? 'Sim' : 'Não');
+          console.log('🤖 Android:', isAndroid() ? 'Sim' : 'Não');
+          console.log('🌐 Navegador:', navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                                    navigator.userAgent.includes('Safari') ? 'Safari' : 
+                                    navigator.userAgent.includes('Firefox') ? 'Firefox' : 'Outro');
+          
+          // Verificar suporte à Web Audio API
+          if (!window.AudioContext && !window.webkitAudioContext) {
+            console.error('❌ Web Audio API não suportada!');
+            alert('❌ Seu navegador não suporta reprodução de áudio!\n\n📱 Use Chrome (Android) ou Safari (iOS)');
+          } else {
+            console.log('✅ Web Audio API suportada');
+          }
           
           // Mostrar instruções específicas para móveis
           setTimeout(() => {
@@ -705,42 +757,59 @@
       const activateAudioContext = React.useCallback(async () => {
         if (isMobileDevice() && !audioContextActivated) {
           try {
-            console.log('Tentando ativar AudioContext para dispositivo móvel...');
+            console.log('🚀 Tentando ativar AudioContext para dispositivo móvel...');
+            console.log('📱 Tipo de dispositivo:', isIOS() ? 'iOS' : isAndroid() ? 'Android' : 'Móvel Genérico');
             
             // Criar um AudioContext temporário para ativar o sistema
-            const tempContext = new (window.AudioContext || window.webkitAudioContext)();
-            console.log('AudioContext temporário criado, estado:', tempContext.state);
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) {
+              throw new Error('Web Audio API não suportada');
+            }
+            
+            const tempContext = new AudioContextClass();
+            console.log('✅ AudioContext temporário criado, estado:', tempContext.state);
             
             // Tentar resumir o contexto
             if (tempContext.state === 'suspended') {
+              console.log('🔄 Resumindo contexto suspenso...');
               await tempContext.resume();
-              console.log('AudioContext temporário resumido, estado:', tempContext.state);
+              console.log('✅ AudioContext temporário resumido, estado:', tempContext.state);
             }
             
             // Criar um oscilador temporário para "despertar" o sistema
+            console.log('🎵 Criando oscilador temporário...');
             const tempOsc = tempContext.createOscillator();
             const tempGain = tempContext.createGain();
-            tempGain.gain.setValueAtTime(0, 0); // Volume 0 para não fazer barulho
+            
+            // Volume muito baixo mas não zero (iOS pode não processar volume 0)
+            tempGain.gain.setValueAtTime(0.001, 0);
+            tempOsc.frequency.setValueAtTime(440, 0); // Nota A4
+            
             tempOsc.connect(tempGain);
             tempGain.connect(tempContext.destination);
-            tempOsc.start(0);
-            tempOsc.stop(0.1);
             
-            // Aguardar um pouco e fechar
-            setTimeout(() => {
-              tempContext.close();
-              console.log('AudioContext temporário fechado');
-            }, 100);
+            // Executar por mais tempo para garantir processamento
+            tempOsc.start(0);
+            tempOsc.stop(0.5);
+            
+            // Aguardar o processamento
+            await new Promise(resolve => setTimeout(resolve, 600));
+            
+            console.log('✅ Estado final do contexto temporário:', tempContext.state);
+            
+            // Fechar o contexto temporário
+            tempContext.close();
+            console.log('🔒 Contexto temporário fechado');
             
             setAudioContextActivated(true);
             console.log('✅ AudioContext ativado com sucesso para dispositivo móvel');
             
             // Mostrar mensagem de sucesso
-            alert('✅ Sistema de áudio ativado! Agora você pode reproduzir sons.');
+            alert('✅ Sistema de áudio ativado!\n\n🎵 Agora você pode reproduzir sons.\n\n💡 Dica: Se ainda não funcionar, tente aumentar o volume do dispositivo.');
             
           } catch (error) {
             console.error('❌ Erro ao ativar AudioContext:', error);
-            alert('❌ Erro ao ativar áudio: ' + error.message);
+            alert('❌ Erro ao ativar áudio: ' + error.message + '\n\n🔧 Tente recarregar a página ou verificar as permissões do navegador.');
           }
         }
       }, [audioContextActivated]);
@@ -849,11 +918,31 @@
                     ? "O sistema de áudio está ativo! Você pode reproduzir sons agora." 
                     : "Para reproduzir áudio, clique no botão abaixo para ativar o sistema."
                 ),
-                !audioContextActivated && React.createElement("button", {
-                  onClick: activateAudioContext,
-                  className: "w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors",
-                  title: "Clique para ativar o sistema de áudio no seu dispositivo móvel"
-                }, "🔊 Ativar Sistema de Áudio")
+                !audioContextActivated && React.createElement("div", { className: "space-y-2" },
+                  React.createElement("button", {
+                    onClick: activateAudioContext,
+                    className: "w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors",
+                    title: "Clique para ativar o sistema de áudio no seu dispositivo móvel"
+                  }, "🔊 Ativar Sistema de Áudio"),
+                  React.createElement("button", {
+                    onClick: () => {
+                      console.log('🧪 Testando áudio...');
+                      const testContext = new (window.AudioContext || window.webkitAudioContext)();
+                      const testOsc = testContext.createOscillator();
+                      const testGain = testContext.createGain();
+                      testGain.gain.setValueAtTime(0.1, 0);
+                      testOsc.frequency.setValueAtTime(440, 0);
+                      testOsc.connect(testGain);
+                      testGain.connect(testContext.destination);
+                      testOsc.start(0);
+                      testOsc.stop(0.3);
+                      setTimeout(() => testContext.close(), 400);
+                      alert('🧪 Teste de áudio executado! Se você ouviu um beep, o áudio está funcionando.');
+                    },
+                    className: "w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium transition-colors text-sm",
+                    title: "Testa se o áudio está funcionando no seu dispositivo"
+                  }, "🧪 Testar Áudio")
+                )
               )
             ),
             React.createElement("main", null,
