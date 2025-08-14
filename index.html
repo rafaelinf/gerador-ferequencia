@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Aura Harmonics - Tone Generator</title>
+  <title>Aura Harmonics - Gerador de Tons</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#111827; color:#f3f4f6; }
@@ -43,9 +43,9 @@
     };
 
     const TONE_TYPES_CONFIG = [
-      { id: ToneType.ISOCHRONIC, label: 'Isochronic Tones' },
-      { id: ToneType.BINAURAL, label: 'Binaural Beats' },
-      { id: ToneType.MONAURAL, label: 'Monaural Beats' }
+      { id: ToneType.ISOCHRONIC, label: 'Tons Isocrônicos' },
+      { id: ToneType.BINAURAL, label: 'Batidas Binaurais' },
+      { id: ToneType.MONAURAL, label: 'Batidas Monaurais' }
     ];
 
     const DEFAULT_EXPORT_DURATION_MINUTES = 5;
@@ -62,7 +62,7 @@
     ];
 
     /************ ParameterInput Component ************/
-    function ParameterInput({ label, id, value, onChange, min, max, step = 0.1, unit = "Hz" }) {
+    function ParameterInput({ label, id, value, onChange, min, max, step = 0.1, unit = "Hz", tooltip = "" }) {
       const [inputValue, setInputValue] = React.useState(String(value));
       const inputRef = React.useRef(null);
 
@@ -110,7 +110,11 @@
 
       return (
         React.createElement("div", null,
-          React.createElement("label", { htmlFor: id, className: "block text-sm font-medium text-gray-300 mb-1" }, label),
+          React.createElement("label", { 
+            htmlFor: id, 
+            className: "block text-sm font-medium text-gray-300 mb-1",
+            title: tooltip || `Ajuste o valor de ${label.toLowerCase()}. Valor mínimo: ${min}, máximo: ${max}, passo: ${step}`
+          }, label),
           React.createElement("div", { className: "relative" },
             React.createElement("input", {
               ref: inputRef,
@@ -387,18 +391,72 @@
       const renderSettingsInputs = () => {
         if (selectedToneType === ToneType.ISOCHRONIC) {
           return React.createElement(React.Fragment, null,
-            React.createElement(ParameterInput, { label:"Carrier Frequency (Hz)", id:"carrierFreq", value: settings.carrierFreq, onChange: v => onSettingsChange({carrierFreq: v}), min: FREQUENCY_RANGES.carrierFreq.min, max: FREQUENCY_RANGES.carrierFreq.max, step: FREQUENCY_RANGES.carrierFreq.step }),
-            React.createElement(ParameterInput, { label:"Pulse Frequency (Hz)", id:"pulseFreq", value: settings.pulseFreq, onChange: v => onSettingsChange({pulseFreq: v}), min: FREQUENCY_RANGES.pulseFreq.min, max: FREQUENCY_RANGES.pulseFreq.max, step: FREQUENCY_RANGES.pulseFreq.step })
+            React.createElement(ParameterInput, { 
+              label:"Frequência Portadora (Hz)", 
+              id:"carrierFreq", 
+              value: settings.carrierFreq, 
+              onChange: v => onSettingsChange({carrierFreq: v}), 
+              min: FREQUENCY_RANGES.carrierFreq.min, 
+              max: FREQUENCY_RANGES.carrierFreq.max, 
+              step: FREQUENCY_RANGES.carrierFreq.step,
+              tooltip: "Frequência principal do tom isocrônico. Esta é a frequência base que será pulsada para criar o efeito de sincronização cerebral."
+            }),
+            React.createElement(ParameterInput, { 
+              label:"Frequência de Pulso (Hz)", 
+              id:"pulseFreq", 
+              value: settings.pulseFreq, 
+              onChange: v => onSettingsChange({pulseFreq: v}), 
+              min: FREQUENCY_RANGES.pulseFreq.min, 
+              max: FREQUENCY_RANGES.pulseFreq.max, 
+              step: FREQUENCY_RANGES.pulseFreq.step,
+              tooltip: "Velocidade com que o tom portador é ligado e desligado. Frequências baixas (0.5-10Hz) são ideais para relaxamento, altas (10-40Hz) para foco."
+            })
           );
         } else if (selectedToneType === ToneType.BINAURAL) {
           return React.createElement(React.Fragment, null,
-            React.createElement(ParameterInput, { label:"Base Frequency (Hz)", id:"baseFreq", value: settings.baseFreq, onChange: v => onSettingsChange({baseFreq: v}), min: FREQUENCY_RANGES.baseFreq.min, max: FREQUENCY_RANGES.baseFreq.max, step: FREQUENCY_RANGES.baseFreq.step }),
-            React.createElement(ParameterInput, { label:"Beat Frequency (Hz)", id:"beatFreq", value: settings.beatFreq, onChange: v => onSettingsChange({beatFreq: v}), min: FREQUENCY_RANGES.beatFreq.min, max: FREQUENCY_RANGES.beatFreq.max, step: FREQUENCY_RANGES.beatFreq.step })
+            React.createElement(ParameterInput, { 
+              label:"Frequência Base (Hz)", 
+              id:"baseFreq", 
+              value: settings.baseFreq, 
+              onChange: v => onSettingsChange({baseFreq: v}), 
+              min: FREQUENCY_RANGES.baseFreq.min, 
+              max: FREQUENCY_RANGES.baseFreq.max, 
+              step: FREQUENCY_RANGES.baseFreq.step,
+              tooltip: "Frequência central das batidas binaurais. O cérebro criará batidas na diferença entre as frequências dos dois ouvidos."
+            }),
+            React.createElement(ParameterInput, { 
+              label:"Frequência de Batida (Hz)", 
+              id:"beatFreq", 
+              value: settings.beatFreq, 
+              onChange: v => onSettingsChange({beatFreq: v}), 
+              min: FREQUENCY_RANGES.beatFreq.min, 
+              max: FREQUENCY_RANGES.beatFreq.max, 
+              step: FREQUENCY_RANGES.beatFreq.step,
+              tooltip: "Frequência da batida percebida pelo cérebro. Delta (0.5-4Hz): sono profundo, Theta (4-8Hz): meditação, Alpha (8-13Hz): relaxamento, Beta (13-30Hz): foco."
+            })
           );
         } else {
           return React.createElement(React.Fragment, null,
-            React.createElement(ParameterInput, { label:"Frequency 1 (Hz)", id:"freq1", value: settings.freq1, onChange: v => onSettingsChange({freq1: v}), min: FREQUENCY_RANGES.freq1.min, max: FREQUENCY_RANGES.freq1.max, step: FREQUENCY_RANGES.freq1.step }),
-            React.createElement(ParameterInput, { label:"Frequency 2 (Hz)", id:"freq2", value: settings.freq2, onChange: v => onSettingsChange({freq2: v}), min: FREQUENCY_RANGES.freq2.min, max: FREQUENCY_RANGES.freq2.max, step: FREQUENCY_RANGES.freq2.step })
+            React.createElement(ParameterInput, { 
+              label:"Frequência 1 (Hz)", 
+              id:"freq1", 
+              value: settings.freq1, 
+              onChange: v => onSettingsChange({freq1: v}), 
+              min: FREQUENCY_RANGES.freq1.min, 
+              max: FREQUENCY_RANGES.freq1.max, 
+              step: FREQUENCY_RANGES.freq1.step,
+              tooltip: "Primeira frequência para criar batidas monaurais. Esta frequência será misturada com a segunda para criar o efeito desejado."
+            }),
+            React.createElement(ParameterInput, { 
+              label:"Frequência 2 (Hz)", 
+              id:"freq2", 
+              value: settings.freq2, 
+              onChange: v => onSettingsChange({freq2: v}), 
+              min: FREQUENCY_RANGES.freq2.min, 
+              max: FREQUENCY_RANGES.freq2.max, 
+              step: FREQUENCY_RANGES.freq2.step,
+              tooltip: "Segunda frequência para criar batidas monaurais. A diferença entre as duas frequências determina o efeito percebido."
+            })
           );
         }
       };
@@ -406,29 +464,71 @@
       return (
         React.createElement("div", { className: "space-y-6" },
           React.createElement("div", { className: "p-1 bg-gray-700 rounded-lg flex space-x-1" },
-            toneTypesConfig.map(tone => React.createElement("button", {
-              key: tone.id,
-              onClick: () => onToneTypeChange(tone.id),
-              disabled: isPlaying || isExporting,
-              className: `w-full py-2.5 px-4 rounded-md text-sm font-medium transition-colors duration-150 focus:outline-none ${selectedToneType === tone.id ? 'bg-violet-600 text-white shadow-md' : 'text-gray-300 hover:bg-gray-600 hover:text-white'} disabled:opacity-60 disabled:cursor-not-allowed`
-            }, tone.label))
+            toneTypesConfig.map(tone => {
+              let tooltipText = "";
+              switch (tone.id) {
+                case ToneType.ISOCHRONIC:
+                  tooltipText = "Tons isocrônicos são pulsos de som que se ligam e desligam em uma frequência específica. Eles podem ajudar na sincronização das ondas cerebrais para foco, relaxamento e meditação.";
+                  break;
+                case ToneType.BINAURAL:
+                  tooltipText = "Batidas binaurais são criadas quando dois tons de frequências ligeiramente diferentes são apresentados separadamente para cada ouvido. O cérebro percebe a diferença como uma batida rítmica que pode influenciar estados mentais.";
+                  break;
+                case ToneType.MONAURAL:
+                  tooltipText = "Batidas monaurais são criadas quando dois tons de frequências diferentes são misturados antes de chegarem aos ouvidos. Eles podem ajudar na concentração e relaxamento.";
+                  break;
+              }
+              return React.createElement("button", {
+                key: tone.id,
+                onClick: () => onToneTypeChange(tone.id),
+                disabled: isPlaying || isExporting,
+                title: tooltipText,
+                className: `w-full py-2.5 px-4 rounded-md text-sm font-medium transition-colors duration-150 focus:outline-none ${selectedToneType === tone.id ? 'bg-violet-600 text-white shadow-md' : 'text-gray-300 hover:bg-gray-600 hover:text-white'} disabled:opacity-60 disabled:cursor-not-allowed`
+              }, tone.label);
+            })
           ),
 
           React.createElement("div", { className: "p-4 bg-gray-700/50 rounded-lg" },
             React.createElement("h3", { className: "text-lg font-medium text-gray-200 mb-3" }, "Presets"),
             React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-2" },
-              presets.map(p => React.createElement("button", {
-                key: p.id, onClick: () => onPresetSelect(p.id), disabled: isExporting,
-                title: p.description,
-                className: "px-3 py-2 text-xs font-medium text-center text-white bg-violet-500 rounded-lg hover:bg-violet-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed truncate"
-              }, p.name))
+              presets.map(p => {
+                let detailedTooltip = "";
+                switch (p.id) {
+                  case 'focusAlphaBinaural':
+                    detailedTooltip = "Foco (Alpha Binaural): Frequência de 10Hz para clareza mental e concentração. Ideal para estudos, trabalho e atividades que requerem atenção.";
+                    break;
+                  case 'meditationThetaBinaural':
+                    detailedTooltip = "Meditação (Theta Binaural): Frequência de 6Hz para relaxamento profundo e meditação. Ajuda a alcançar estados de consciência alterados.";
+                    break;
+                  case 'solfeggio528Iso':
+                    detailedTooltip = "Solfeggio 528Hz (Iso): Frequência conhecida como 'frequência do amor'. Promove equilíbrio emocional, transformação e cura.";
+                    break;
+                  case 'solfeggio396Monaural':
+                    detailedTooltip = "Solfeggio 396Hz (Mon): Frequência para liberação de medos e culpas. Ajuda a limpar bloqueios emocionais e traumas.";
+                    break;
+                  case 'astralProjectionThetaIso':
+                    detailedTooltip = "Projeção Astral (Theta Iso): Frequência de 4.5Hz para estados alterados de consciência e experiências transcendentais.";
+                    break;
+                  case 'healingGeneralIso':
+                    detailedTooltip = "Cura Geral (432Hz Iso): Frequência harmonizadora que promove equilíbrio físico, mental e espiritual.";
+                    break;
+                }
+                return React.createElement("button", {
+                  key: p.id, onClick: () => onPresetSelect(p.id), disabled: isExporting,
+                  title: detailedTooltip,
+                  className: "px-3 py-2 text-xs font-medium text-center text-white bg-violet-500 rounded-lg hover:bg-violet-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed truncate"
+                }, p.name);
+              })
             )
           ),
 
           React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 p-4 bg-gray-700/50 rounded-lg" }, renderSettingsInputs()),
 
           React.createElement("div", { className: "p-4 bg-gray-700/50 rounded-lg" },
-            React.createElement("label", { htmlFor:"volume", className:"block text-sm font-medium text-gray-300 mb-1" }, "Master Volume"),
+            React.createElement("label", { 
+              htmlFor:"volume", 
+              className:"block text-sm font-medium text-gray-300 mb-1",
+              title: "Controla o volume geral de todos os sons gerados. Ajuste conforme sua preferência e ambiente de uso."
+            }, "Volume Principal"),
             React.createElement("div", { className:"flex items-center space-x-3" },
               React.createElement("input", {
                 id:"volume", type:"range", min:0, max:1, step:0.01, value: volume,
@@ -443,22 +543,35 @@
           React.createElement("div", { className: "flex justify-center items-center space-x-4 pt-4" },
             React.createElement("button", {
               onClick: onPlayToggle, disabled: isExporting,
-              "aria-label": isPlaying ? 'Pause' : 'Play',
+              "aria-label": isPlaying ? 'Pausar' : 'Reproduzir',
+              title: isPlaying ? "Clique para pausar a reprodução do áudio atual" : "Clique para iniciar a reprodução do áudio com as configurações selecionadas",
               className: `p-4 rounded-full transition-all duration-150 focus:outline-none ${isPlaying ? 'bg-teal-500 text-white' : 'bg-green-500 text-white'} disabled:opacity-60 disabled:cursor-not-allowed`
-            }, isPlaying ? "Pause" : "Play"),
+            }, isPlaying ? "Pausar" : "Reproduzir"),
             React.createElement("button", {
               onClick: () => { if (isPlaying) onPlayToggle(); }, disabled: !isPlaying || isExporting,
+              title: "Clique para parar completamente a reprodução do áudio e retornar ao estado inicial",
               className: "p-4 bg-red-500 text-white rounded-full transition-all duration-150 hover:bg-red-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-            }, "Stop")
+            }, "Parar")
           ),
 
           React.createElement("div", { className: "mt-6 pt-6 border-t border-gray-700 space-y-4 p-4 bg-gray-700/50 rounded-lg" },
-            React.createElement("h3", { className: "text-lg font-medium text-gray-200" }, "Export Audio"),
-            React.createElement(ParameterInput, { label:"Duration (minutes)", id:"exportDuration", value: exportDuration, onChange: onExportDurationChange, min: MIN_EXPORT_DURATION_MINUTES, max: MAX_EXPORT_DURATION_MINUTES, step:1, unit:"min" }),
+            React.createElement("h3", { className: "text-lg font-medium text-gray-200" }, "Exportar Áudio"),
+            React.createElement(ParameterInput, { 
+              label:"Duração (minutos)", 
+              id:"exportDuration", 
+              value: exportDuration, 
+              onChange: onExportDurationChange, 
+              min: MIN_EXPORT_DURATION_MINUTES, 
+              max: MAX_EXPORT_DURATION_MINUTES, 
+              step:1, 
+              unit:"min",
+              tooltip: "Define a duração do arquivo de áudio exportado. Arquivos mais longos levam mais tempo para processar, mas permitem sessões mais extensas."
+            }),
             React.createElement("button", {
               onClick: onExport, disabled: isPlaying || isExporting,
+              title: "Exporta o áudio atual como arquivo WAV para download. O arquivo será salvo com a duração especificada e as configurações atuais de frequência e volume.",
               className: "w-full py-2.5 px-4 rounded-md text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-            }, isExporting ? "Exporting..." : "Export as WAV"),
+            }, isExporting ? "Exportando..." : "Exportar como WAV"),
             React.createElement("p", { className: "text-xs text-gray-400 text-center export-status" }, exportStatusMessage)
           ),
 
@@ -466,7 +579,8 @@
             React.createElement("button", {
               onClick: () => setIsInfoExpanded(!isInfoExpanded),
               className: "w-full text-left text-lg font-medium text-gray-200 hover:text-violet-400 transition-colors flex justify-between items-center",
-              "aria-expanded": isInfoExpanded
+              "aria-expanded": isInfoExpanded,
+              title: "Clique para expandir/recolher informações sobre frequências sonoras específicas e seus efeitos terapêuticos conhecidos"
             }, "Informações sobre Frequências Sonoras",
               React.createElement("svg", { className: `w-5 h-5 transform ${isInfoExpanded ? 'rotate-180' : 'rotate-0'}`, fill:"none", stroke:"currentColor", viewBox:"0 0 24 24" },
                 React.createElement("path", { strokeLinecap:"round", strokeLinejoin:"round", strokeWidth:"2", d:"M19 9l-7 7-7-7" })
@@ -582,7 +696,7 @@
           React.createElement("div", { className: "w-full max-w-2xl bg-gray-800 shadow-2xl rounded-xl p-6 md:p-8" },
             React.createElement("header", { className: "mb-8 text-center" },
               React.createElement("h1", { className: "text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-500" }, "Aura Harmonics"),
-              React.createElement("p", { className: "text-gray-400 mt-2" }, "Craft your auditory experience for focus, relaxation, or meditation.")
+              React.createElement("p", { className: "text-gray-400 mt-2" }, "Crie sua experiência auditiva para foco, relaxamento ou meditação.")
             ),
             React.createElement("main", null,
               React.createElement(ControlPanel, {
@@ -605,8 +719,8 @@
               })
             ),
             React.createElement("footer", { className: "mt-8 text-center text-gray-500 text-sm" },
-              React.createElement("p", null, `© ${new Date().getFullYear()} Aura Harmonics. All rights reserved.`),
-              React.createElement("p", { className: "mt-1" }, "Experiment responsibly. Not a medical device.")
+              React.createElement("p", null, `© ${new Date().getFullYear()} Aura Harmonics. Todos os direitos reservados.`),
+              React.createElement("p", { className: "mt-1" }, "Experimente com responsabilidade. Não é um dispositivo médico.")
             )
           )
         )
