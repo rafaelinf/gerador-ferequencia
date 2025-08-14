@@ -29,6 +29,12 @@
       MONAURAL: "Monaural"
     };
 
+    // Função para detectar dispositivos móveis
+    const isMobileDevice = () => {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+             (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+    };
+
     const DEFAULT_VOLUME = 0.5;
     const DEFAULT_ISOCHRONIC_SETTINGS = { carrierFreq: 136.1, pulseFreq: 7.83 };
     const DEFAULT_BINAURAL_SETTINGS = { baseFreq: 100, beatFreq: 10 };
@@ -145,13 +151,37 @@
       const lfoModulatorGainRef = React.useRef(null);
       const currentPlayingTypeRef = React.useRef(null);
 
-      const ensureAudioContext = React.useCallback(() => {
+      const ensureAudioContext = React.useCallback(async () => {
         if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-          masterGainRef.current = audioContextRef.current.createGain();
-          masterGainRef.current.connect(audioContextRef.current.destination);
+          try {
+            // Criar AudioContext com fallback para navegadores mais antigos
+            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            masterGainRef.current = audioContextRef.current.createGain();
+            masterGainRef.current.connect(audioContextRef.current.destination);
+            
+            // Log para debug
+            console.log('AudioContext criado:', audioContextRef.current.state);
+          } catch (error) {
+            console.error('Erro ao criar AudioContext:', error);
+            throw new Error('Não foi possível inicializar o sistema de áudio');
+          }
         }
-        if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
+        
+        // Resolver AudioContext se estiver suspenso
+        if (audioContextRef.current.state === 'suspended') {
+          try {
+            await audioContextRef.current.resume();
+            console.log('AudioContext resumido:', audioContextRef.current.state);
+          } catch (error) {
+            console.error('Erro ao resumir AudioContext:', error);
+            throw new Error('Não foi possível ativar o sistema de áudio');
+          }
+        }
+        
+        // Verificar se o AudioContext está funcionando
+        if (audioContextRef.current.state !== 'running') {
+          console.warn('AudioContext não está rodando:', audioContextRef.current.state);
+        }
       }, []);
 
       const stopAllNodes = React.useCallback((context = audioContextRef.current) => {
@@ -235,27 +265,38 @@
         }
       }, []);
 
-      const play = React.useCallback((type, settings, globalVolume) => {
-        ensureAudioContext();
-        const ac = audioContextRef.current;
-        const masterGain = masterGainRef.current;
-        if (!ac || !masterGain) return;
-        stopAllNodes();
+            const play = React.useCallback(async (type, settings, globalVolume) => {
+        try {
+          await ensureAudioContext();
+          const ac = audioContextRef.current;
+          const masterGain = masterGainRef.current;
+          if (!ac || !masterGain) {
+            console.error('AudioContext ou MasterGain não disponível');
+            return;
+          }
+          stopAllNodes();
 
-        masterGain.gain.setValueAtTime(globalVolume, ac.currentTime);
-        currentPlayingTypeRef.current = type;
+          masterGain.gain.setValueAtTime(globalVolume, ac.currentTime);
+          currentPlayingTypeRef.current = type;
 
-        const liveNodeRefs = {
-          osc1Ref, osc2Ref, panner1Ref, panner2Ref, isochronicCarrierGainRef, pulseLFORef, lfoModulatorGainRef
-        };
+          const liveNodeRefs = {
+            osc1Ref, osc2Ref, panner1Ref, panner2Ref, isochronicCarrierGainRef, pulseLFORef, lfoModulatorGainRef
+          };
 
-        createAudioGraph(ac, masterGain, type, settings, liveNodeRefs);
+          createAudioGraph(ac, masterGain, type, settings, liveNodeRefs);
 
-        if (liveNodeRefs.osc1Ref.current) try{ liveNodeRefs.osc1Ref.current.start(ac.currentTime); }catch(e){}
-        if (liveNodeRefs.osc2Ref.current) try{ liveNodeRefs.osc2Ref.current.start(ac.currentTime); }catch(e){}
-        if (liveNodeRefs.pulseLFORef.current) try{ liveNodeRefs.pulseLFORef.current.start(ac.currentTime); }catch(e){}
+          if (liveNodeRefs.osc1Ref.current) try{ liveNodeRefs.osc1Ref.current.start(ac.currentTime); }catch(e){}
+          if (liveNodeRefs.osc2Ref.current) try{ liveNodeRefs.osc2Ref.current.start(ac.currentTime); }catch(e){}
+          if (liveNodeRefs.pulseLFORef.current) try{ liveNodeRefs.pulseLFORef.current.start(ac.currentTime); }catch(e){}
 
-        setIsPlaying(true);
+          setIsPlaying(true);
+        } catch (error) {
+          console.error('Erro ao reproduzir áudio:', error);
+          // Em dispositivos móveis, mostrar mensagem específica
+          if (error.message.includes('sistema de áudio')) {
+            alert('Para reproduzir áudio no celular, toque primeiro em qualquer lugar da tela e depois clique em Reproduzir novamente.');
+          }
+        }
       }, [ensureAudioContext, stopAllNodes, createAudioGraph]);
 
       const stop = React.useCallback(() => { stopAllNodes(); setIsPlaying(false); }, [stopAllNodes]);
@@ -606,6 +647,7 @@
       const [binauralSettings, setBinauralSettings] = React.useState(DEFAULT_BINAURAL_SETTINGS);
       const [monauralSettings, setMonauralSettings] = React.useState(DEFAULT_MONAURAL_SETTINGS);
       const [volume, setVolume] = React.useState(DEFAULT_VOLUME);
+      const [audioContextActivated, setAudioContextActivated] = React.useState(false);
 
       const [exportDuration, setExportDuration] = React.useState(DEFAULT_EXPORT_DURATION_MINUTES);
       const [isExporting, setIsExporting] = React.useState(false);
@@ -613,6 +655,22 @@
 
       const audio = useAudioEngine();
       const { play, stop, isPlaying, setGlobalVolume, exportAudioAsWav } = audio;
+
+      // Função para ativar o AudioContext em dispositivos móveis
+      const activateAudioContext = React.useCallback(async () => {
+        if (isMobileDevice() && !audioContextActivated) {
+          try {
+            // Criar um AudioContext temporário para ativar o sistema
+            const tempContext = new (window.AudioContext || window.webkitAudioContext)();
+            await tempContext.resume();
+            tempContext.close();
+            setAudioContextActivated(true);
+            console.log('AudioContext ativado para dispositivo móvel');
+          } catch (error) {
+            console.error('Erro ao ativar AudioContext:', error);
+          }
+        }
+      }, [audioContextActivated]);
 
       const getCurrentSettings = React.useCallback(() => {
         switch (selectedToneType) {
@@ -692,11 +750,31 @@
       }, [isExporting]);
 
       return (
-        React.createElement("div", { className: "min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4" },
+        React.createElement("div", { 
+          className: "min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4",
+          onTouchStart: activateAudioContext,
+          onClick: activateAudioContext
+        },
           React.createElement("div", { className: "w-full max-w-2xl bg-gray-800 shadow-2xl rounded-xl p-6 md:p-8" },
             React.createElement("header", { className: "mb-8 text-center" },
               React.createElement("h1", { className: "text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-500" }, "Aura Harmonics"),
-              React.createElement("p", { className: "text-gray-400 mt-2" }, "Crie sua experiência auditiva para foco, relaxamento ou meditação.")
+              React.createElement("p", { className: "text-gray-400 mt-2" }, "Crie sua experiência auditiva para foco, relaxamento ou meditação."),
+              isMobileDevice() && React.createElement("div", { 
+                className: `mt-4 p-3 border rounded-lg text-sm transition-colors duration-300 ${
+                  audioContextActivated 
+                    ? 'bg-green-900/30 border-green-500/30 text-green-200' 
+                    : 'bg-blue-900/30 border-blue-500/30 text-blue-200'
+                }` 
+              }, 
+                React.createElement("p", { className: "font-medium mb-1" }, 
+                  audioContextActivated ? "✅ Áudio Ativado" : "📱 Dispositivo Móvel Detectado"
+                ),
+                React.createElement("p", null, 
+                  audioContextActivated 
+                    ? "O sistema de áudio está ativo! Você pode reproduzir sons agora." 
+                    : "Para reproduzir áudio, toque primeiro em qualquer lugar da tela, depois clique em Reproduzir."
+                )
+              )
             ),
             React.createElement("main", null,
               React.createElement(ControlPanel, {
