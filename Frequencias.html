@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Aura Harmonics - Tone Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#111827; color:#f3f4f6; }
+    ::-webkit-scrollbar { width:8px; }
+    ::-webkit-scrollbar-track { background:#1f2937; }
+    ::-webkit-scrollbar-thumb { background:#4b5563; border-radius:4px; }
+    ::-webkit-scrollbar-thumb:hover { background:#6b7280; }
+    .export-status { min-height: 1.5em; }
+  </style>
+</head>
+<body class="antialiased">
+  <div id="root"></div>
+
+  <!-- Usamos módulos ESM para React/ReactDOM (esm.sh CDN) -->
+  <script type="module">
+    import React from "https://esm.sh/react@18.2.0";
+    import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
+
+    /************ Constants & Types ************/
+    const ToneType = {
+      ISOCHRONIC: "Isochronic",
+      BINAURAL: "Binaural",
+      MONAURAL: "Monaural"
+    };
+
+    const DEFAULT_VOLUME = 0.5;
+    const DEFAULT_ISOCHRONIC_SETTINGS = { carrierFreq: 136.1, pulseFreq: 7.83 };
+    const DEFAULT_BINAURAL_SETTINGS = { baseFreq: 100, beatFreq: 10 };
+    const DEFAULT_MONAURAL_SETTINGS = { freq1: 200, freq2: 205 };
+    const FREQUENCY_RANGES = {
+      carrierFreq: { min: 20, max: 1500, step: 0.1 },
+      pulseFreq:   { min: 0.5, max: 40, step: 0.1 },
+      baseFreq:    { min: 20, max: 1500, step: 0.1 },
+      beatFreq:    { min: 0.5, max: 50, step: 0.1 },
+      freq1:       { min: 20, max: 1500, step: 0.1 },
+      freq2:       { min: 20, max: 1500, step: 0.1 }
+    };
+
+    const TONE_TYPES_CONFIG = [
+      { id: ToneType.ISOCHRONIC, label: 'Isochronic Tones' },
+      { id: ToneType.BINAURAL, label: 'Binaural Beats' },
+      { id: ToneType.MONAURAL, label: 'Monaural Beats' }
+    ];
+
+    const DEFAULT_EXPORT_DURATION_MINUTES = 5;
+    const MIN_EXPORT_DURATION_MINUTES = 1;
+    const MAX_EXPORT_DURATION_MINUTES = 120;
+
+    const PRESETS = [
+      { id:'focusAlphaBinaural', name:"Foco (Alpha Binaural)", description:"Para clareza mental", toneType: ToneType.BINAURAL, settings:{ baseFreq:100, beatFreq:10 } },
+      { id:'meditationThetaBinaural', name:"Meditação (Theta Binaural)", description:"Relaxamento profundo", toneType: ToneType.BINAURAL, settings:{ baseFreq:136.1, beatFreq:6 } },
+      { id:'solfeggio528Iso', name:"Solfeggio 528Hz (Iso)", description:"Equilíbrio emocional", toneType: ToneType.ISOCHRONIC, settings:{ carrierFreq:528, pulseFreq:7.83 } },
+      { id:'solfeggio396Monaural', name:"Solfeggio 396Hz (Mon)", description:"Liberação de medos", toneType: ToneType.MONAURAL, settings:{ freq1:396, freq2:398 } },
+      { id:'astralProjectionThetaIso', name:"Projeção Astral (Theta Iso)", description:"Estados alterados", toneType: ToneType.ISOCHRONIC, settings:{ carrierFreq:100, pulseFreq:4.5 } },
+      { id:'healingGeneralIso', name:"Cura Geral (432Hz Iso)", description:"Harmonização", toneType: ToneType.ISOCHRONIC, settings:{ carrierFreq:432, pulseFreq:10 } }
+    ];
+
+    /************ ParameterInput Component ************/
+    function ParameterInput({ label, id, value, onChange, min, max, step = 0.1, unit = "Hz" }) {
+      const [inputValue, setInputValue] = React.useState(String(value));
+      const inputRef = React.useRef(null);
+
+      React.useEffect(() => {
+        if (inputRef.current !== document.activeElement) setInputValue(String(value));
+      }, [value]);
+
+      const handleChange = (e) => {
+        const currentStr = e.target.value;
+        setInputValue(currentStr);
+        if (currentStr === "" || currentStr === "-" || currentStr.endsWith(".")) return;
+        const numeric = parseFloat(currentStr);
+        if (!isNaN(numeric)) {
+          let clamped = numeric;
+          if (typeof min === 'number' && isFinite(min) && clamped < min) clamped = min;
+          if (typeof max === 'number' && isFinite(max) && clamped > max) clamped = max;
+          if (clamped !== value) onChange(clamped);
+        }
+      };
+
+      const handleBlur = () => {
+        let cur = inputValue;
+        let numeric = parseFloat(cur);
+        let finalVal;
+        const numMinDefined = typeof min === 'number' && isFinite(min);
+        const numMaxDefined = typeof max === 'number' && isFinite(max);
+
+        if (cur === "") finalVal = numMinDefined ? min : 0;
+        else if (isNaN(numeric)) finalVal = value;
+        else {
+          if (numMinDefined && numeric < min) finalVal = min;
+          else if (numMaxDefined && numeric > max) finalVal = max;
+          else finalVal = numeric;
+        }
+
+        if (typeof step === 'number' && step > 0 && isFinite(finalVal)) {
+          finalVal = Math.round(finalVal / step) * step;
+          const dp = (String(step).split('.')[1] || '').length;
+          if (dp > 0) finalVal = parseFloat(finalVal.toFixed(dp));
+        }
+
+        setInputValue(String(finalVal));
+        if (finalVal !== value) onChange(finalVal);
+      };
+
+      return (
+        React.createElement("div", null,
+          React.createElement("label", { htmlFor: id, className: "block text-sm font-medium text-gray-300 mb-1" }, label),
+          React.createElement("div", { className: "relative" },
+            React.createElement("input", {
+              ref: inputRef,
+              id, name: id, type: "text", inputMode: "decimal",
+              value: inputValue, onChange: handleChange, onBlur: handleBlur,
+              "aria-valuemin": typeof min === 'number' && isFinite(min) ? min : undefined,
+              "aria-valuemax": typeof max === 'number' && isFinite(max) ? max : undefined,
+              className: "w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 sm:text-sm"
+            }),
+            unit && React.createElement("span", { className: "absolute inset-y-0 right-0 pr-3 flex items-center text-sm text-gray-500 pointer-events-none" }, unit)
+          )
+        )
+      );
+    }
+
+    /************ Audio Engine Hook (useAudioEngine) ************/
+    function useAudioEngine() {
+      const [isPlaying, setIsPlaying] = React.useState(false);
+      const audioContextRef = React.useRef(null);
+      const masterGainRef = React.useRef(null);
+
+      const osc1Ref = React.useRef(null);
+      const osc2Ref = React.useRef(null);
+      const panner1Ref = React.useRef(null);
+      const panner2Ref = React.useRef(null);
+      const isochronicCarrierGainRef = React.useRef(null);
+      const pulseLFORef = React.useRef(null);
+      const lfoModulatorGainRef = React.useRef(null);
+      const currentPlayingTypeRef = React.useRef(null);
+
+      const ensureAudioContext = React.useCallback(() => {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+          masterGainRef.current = audioContextRef.current.createGain();
+          masterGainRef.current.connect(audioContextRef.current.destination);
+        }
+        if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
+      }, []);
+
+      const stopAllNodes = React.useCallback((context = audioContextRef.current) => {
+        if (!context) return;
+        const nodesToStop = [osc1Ref.current, osc2Ref.current, pulseLFORef.current];
+        nodesToStop.forEach(node => {
+          if (node) { try { node.stop(); } catch(e){} try { node.disconnect(); } catch(e){} }
+        });
+        osc1Ref.current = null; osc2Ref.current = null; pulseLFORef.current = null;
+
+        const nodesToDisconnect = [panner1Ref.current, panner2Ref.current, lfoModulatorGainRef.current, isochronicCarrierGainRef.current];
+        nodesToDisconnect.forEach(node => { if (node) { try { node.disconnect(); } catch(e){} } });
+        panner1Ref.current = null; panner2Ref.current = null; lfoModulatorGainRef.current = null; isochronicCarrierGainRef.current = null;
+
+        if (context === audioContextRef.current) currentPlayingTypeRef.current = null;
+      }, []);
+
+      const createAudioGraph = React.useCallback((ac, destinationNode, type, settings, nodeRefs) => {
+        // Clean existing refs
+        Object.values(nodeRefs).forEach(ref => {
+          if (ref.current) { try { ref.current.disconnect(); } catch(e){} ref.current = null; }
+        });
+
+        switch (type) {
+          case ToneType.ISOCHRONIC: {
+            const { carrierFreq, pulseFreq } = settings;
+            nodeRefs.osc1Ref.current = ac.createOscillator();
+            nodeRefs.osc1Ref.current.type = 'sine';
+            nodeRefs.osc1Ref.current.frequency.setValueAtTime(carrierFreq, ac.currentTime);
+
+            nodeRefs.isochronicCarrierGainRef.current = ac.createGain();
+            nodeRefs.isochronicCarrierGainRef.current.gain.setValueAtTime(0.5, ac.currentTime);
+
+            nodeRefs.pulseLFORef.current = ac.createOscillator();
+            nodeRefs.pulseLFORef.current.type = 'sine';
+            nodeRefs.pulseLFORef.current.frequency.setValueAtTime(pulseFreq, ac.currentTime);
+
+            nodeRefs.lfoModulatorGainRef.current = ac.createGain();
+            nodeRefs.lfoModulatorGainRef.current.gain.setValueAtTime(0.5, ac.currentTime);
+
+            nodeRefs.osc1Ref.current.connect(nodeRefs.isochronicCarrierGainRef.current);
+            nodeRefs.isochronicCarrierGainRef.current.connect(destinationNode);
+
+            nodeRefs.pulseLFORef.current.connect(nodeRefs.lfoModulatorGainRef.current);
+            nodeRefs.lfoModulatorGainRef.current.connect(nodeRefs.isochronicCarrierGainRef.current.gain);
+            break;
+          }
+          case ToneType.BINAURAL: {
+            const { baseFreq, beatFreq } = settings;
+            const freqLeft = baseFreq - beatFreq / 2;
+            const freqRight = baseFreq + beatFreq / 2;
+
+            nodeRefs.osc1Ref.current = ac.createOscillator();
+            nodeRefs.osc1Ref.current.type = 'sine';
+            nodeRefs.osc1Ref.current.frequency.setValueAtTime(freqLeft, ac.currentTime);
+            nodeRefs.panner1Ref.current = ac.createStereoPanner();
+            nodeRefs.panner1Ref.current.pan.setValueAtTime(-1, ac.currentTime);
+            nodeRefs.osc1Ref.current.connect(nodeRefs.panner1Ref.current).connect(destinationNode);
+
+            nodeRefs.osc2Ref.current = ac.createOscillator();
+            nodeRefs.osc2Ref.current.type = 'sine';
+            nodeRefs.osc2Ref.current.frequency.setValueAtTime(freqRight, ac.currentTime);
+            nodeRefs.panner2Ref.current = ac.createStereoPanner();
+            nodeRefs.panner2Ref.current.pan.setValueAtTime(1, ac.currentTime);
+            nodeRefs.osc2Ref.current.connect(nodeRefs.panner2Ref.current).connect(destinationNode);
+            break;
+          }
+          case ToneType.MONAURAL: {
+            const { freq1, freq2 } = settings;
+            nodeRefs.osc1Ref.current = ac.createOscillator();
+            nodeRefs.osc1Ref.current.type = 'sine';
+            nodeRefs.osc1Ref.current.frequency.setValueAtTime(freq1, ac.currentTime);
+            nodeRefs.osc1Ref.current.connect(destinationNode);
+
+            nodeRefs.osc2Ref.current = ac.createOscillator();
+            nodeRefs.osc2Ref.current.type = 'sine';
+            nodeRefs.osc2Ref.current.frequency.setValueAtTime(freq2, ac.currentTime);
+            nodeRefs.osc2Ref.current.connect(destinationNode);
+            break;
+          }
+        }
+      }, []);
+
+      const play = React.useCallback((type, settings, globalVolume) => {
+        ensureAudioContext();
+        const ac = audioContextRef.current;
+        const masterGain = masterGainRef.current;
+        if (!ac || !masterGain) return;
+        stopAllNodes();
+
+        masterGain.gain.setValueAtTime(globalVolume, ac.currentTime);
+        currentPlayingTypeRef.current = type;
+
+        const liveNodeRefs = {
+          osc1Ref, osc2Ref, panner1Ref, panner2Ref, isochronicCarrierGainRef, pulseLFORef, lfoModulatorGainRef
+        };
+
+        createAudioGraph(ac, masterGain, type, settings, liveNodeRefs);
+
+        if (liveNodeRefs.osc1Ref.current) try{ liveNodeRefs.osc1Ref.current.start(ac.currentTime); }catch(e){}
+        if (liveNodeRefs.osc2Ref.current) try{ liveNodeRefs.osc2Ref.current.start(ac.currentTime); }catch(e){}
+        if (liveNodeRefs.pulseLFORef.current) try{ liveNodeRefs.pulseLFORef.current.start(ac.currentTime); }catch(e){}
+
+        setIsPlaying(true);
+      }, [ensureAudioContext, stopAllNodes, createAudioGraph]);
+
+      const stop = React.useCallback(() => { stopAllNodes(); setIsPlaying(false); }, [stopAllNodes]);
+
+      const setGlobalVolume = React.useCallback((volume) => {
+        if (masterGainRef.current && audioContextRef.current) {
+          masterGainRef.current.gain.setValueAtTime(volume, audioContextRef.current.currentTime);
+        }
+      }, []);
+
+      React.useEffect(() => {
+        const ac = audioContextRef.current;
+        return () => {
+          stopAllNodes();
+          if (ac && ac.state !== 'closed') {
+            ac.close().catch(()=>{});
+            audioContextRef.current = null;
+            masterGainRef.current = null;
+          }
+        };
+      }, [stopAllNodes]);
+
+      // WAV encoding helpers
+      function interleave(inputL, inputR) {
+        const length = inputL.length + inputR.length;
+        const result = new Float32Array(length);
+        let index = 0, inputIndex = 0;
+        while (index < length) {
+          result[index++] = inputL[inputIndex];
+          result[index++] = inputR[inputIndex];
+          inputIndex++;
+        }
+        return result;
+      }
+
+      function encodeWAV(audioBuffer) {
+        const numChannels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const bitDepth = 16;
+        let result;
+        if (numChannels === 2) result = interleave(audioBuffer.getChannelData(0), audioBuffer.getChannelData(1));
+        else result = audioBuffer.getChannelData(0);
+
+        const dataLength = result.length * (bitDepth / 8);
+        const buffer = new ArrayBuffer(44 + dataLength);
+        const view = new DataView(buffer);
+        let offset = 0;
+
+        function writeString(str) { for (let i=0;i<str.length;i++) view.setUint8(offset++, str.charCodeAt(i)); }
+
+        writeString('RIFF');
+        view.setUint32(offset, 36 + dataLength, true); offset += 4;
+        writeString('WAVE');
+        writeString('fmt ');
+        view.setUint32(offset, 16, true); offset += 4;
+        view.setUint16(offset, 1, true); offset += 2; // PCM
+        view.setUint16(offset, numChannels, true); offset += 2;
+        view.setUint32(offset, sampleRate, true); offset += 4;
+        view.setUint32(offset, sampleRate * numChannels * (bitDepth/8), true); offset += 4;
+        view.setUint16(offset, numChannels * (bitDepth/8), true); offset += 2;
+        view.setUint16(offset, bitDepth, true); offset += 2;
+        writeString('data');
+        view.setUint32(offset, dataLength, true); offset += 4;
+
+        let index = 0;
+        while (offset < 44 + dataLength && index < result.length) {
+          let sample = result[index++];
+          sample = Math.max(-1, Math.min(1, sample));
+          sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+          view.setInt16(offset, sample, true);
+          offset += 2;
+        }
+        return new Blob([view], { type: 'audio/wav' });
+      }
+
+      const exportAudioAsWav = async (type, settings, globalVolume, durationInSeconds) => {
+        const sampleRate = 44100;
+        const numChannels = (type === ToneType.BINAURAL) ? 2 : 1;
+        const OfflineAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!OfflineAC) throw new Error("OfflineAudioContext não suportado no navegador.");
+
+        const offlineCtx = new OfflineAC(numChannels, Math.floor(sampleRate * durationInSeconds), sampleRate);
+        const offlineMasterGain = offlineCtx.createGain();
+        offlineMasterGain.gain.setValueAtTime(globalVolume, 0);
+        offlineMasterGain.connect(offlineCtx.destination);
+
+        const offlineNodeRefs = {
+          osc1Ref: { current: null },
+          osc2Ref: { current: null },
+          panner1Ref: { current: null },
+          panner2Ref: { current: null },
+          isochronicCarrierGainRef: { current: null },
+          pulseLFORef: { current: null },
+          lfoModulatorGainRef: { current: null }
+        };
+
+        createAudioGraph(offlineCtx, offlineMasterGain, type, settings, offlineNodeRefs);
+
+        if (offlineNodeRefs.osc1Ref.current) try{ offlineNodeRefs.osc1Ref.current.start(0); }catch(e){}
+        if (offlineNodeRefs.osc2Ref.current) try{ offlineNodeRefs.osc2Ref.current.start(0); }catch(e){}
+        if (offlineNodeRefs.pulseLFORef.current) try{ offlineNodeRefs.pulseLFORef.current.start(0); }catch(e){}
+
+        const rendered = await offlineCtx.startRendering();
+        if (!rendered || rendered.length === 0) throw new Error("Render vazio.");
+        const wavBlob = encodeWAV(rendered);
+
+        const url = URL.createObjectURL(wavBlob);
+        const a = document.createElement('a');
+        document.body.appendChild(a);
+        a.style.display = 'none';
+        a.href = url;
+        const timestamp = new Date().toISOString().replace(/[:.]/g,'-');
+        a.download = `aura_harmonics_${type.toLowerCase().replace(/\s+/g,'_')}_${timestamp}.wav`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        return true;
+      };
+
+      return { play, stop, isPlaying, setGlobalVolume, exportAudioAsWav };
+    }
+
+    /************ ControlPanel Component ************/
+    function ControlPanel(props) {
+      const {
+        toneTypesConfig, selectedToneType, onToneTypeChange, settings, onSettingsChange,
+        volume, onVolumeChange, onPlayToggle, isPlaying, onExport, exportDuration, onExportDurationChange,
+        isExporting, exportStatusMessage, presets, onPresetSelect
+      } = props;
+
+      const [isInfoExpanded, setIsInfoExpanded] = React.useState(false);
+
+      const renderSettingsInputs = () => {
+        if (selectedToneType === ToneType.ISOCHRONIC) {
+          return React.createElement(React.Fragment, null,
+            React.createElement(ParameterInput, { label:"Carrier Frequency (Hz)", id:"carrierFreq", value: settings.carrierFreq, onChange: v => onSettingsChange({carrierFreq: v}), min: FREQUENCY_RANGES.carrierFreq.min, max: FREQUENCY_RANGES.carrierFreq.max, step: FREQUENCY_RANGES.carrierFreq.step }),
+            React.createElement(ParameterInput, { label:"Pulse Frequency (Hz)", id:"pulseFreq", value: settings.pulseFreq, onChange: v => onSettingsChange({pulseFreq: v}), min: FREQUENCY_RANGES.pulseFreq.min, max: FREQUENCY_RANGES.pulseFreq.max, step: FREQUENCY_RANGES.pulseFreq.step })
+          );
+        } else if (selectedToneType === ToneType.BINAURAL) {
+          return React.createElement(React.Fragment, null,
+            React.createElement(ParameterInput, { label:"Base Frequency (Hz)", id:"baseFreq", value: settings.baseFreq, onChange: v => onSettingsChange({baseFreq: v}), min: FREQUENCY_RANGES.baseFreq.min, max: FREQUENCY_RANGES.baseFreq.max, step: FREQUENCY_RANGES.baseFreq.step }),
+            React.createElement(ParameterInput, { label:"Beat Frequency (Hz)", id:"beatFreq", value: settings.beatFreq, onChange: v => onSettingsChange({beatFreq: v}), min: FREQUENCY_RANGES.beatFreq.min, max: FREQUENCY_RANGES.beatFreq.max, step: FREQUENCY_RANGES.beatFreq.step })
+          );
+        } else {
+          return React.createElement(React.Fragment, null,
+            React.createElement(ParameterInput, { label:"Frequency 1 (Hz)", id:"freq1", value: settings.freq1, onChange: v => onSettingsChange({freq1: v}), min: FREQUENCY_RANGES.freq1.min, max: FREQUENCY_RANGES.freq1.max, step: FREQUENCY_RANGES.freq1.step }),
+            React.createElement(ParameterInput, { label:"Frequency 2 (Hz)", id:"freq2", value: settings.freq2, onChange: v => onSettingsChange({freq2: v}), min: FREQUENCY_RANGES.freq2.min, max: FREQUENCY_RANGES.freq2.max, step: FREQUENCY_RANGES.freq2.step })
+          );
+        }
+      };
+
+      return (
+        React.createElement("div", { className: "space-y-6" },
+          React.createElement("div", { className: "p-1 bg-gray-700 rounded-lg flex space-x-1" },
+            toneTypesConfig.map(tone => React.createElement("button", {
+              key: tone.id,
+              onClick: () => onToneTypeChange(tone.id),
+              disabled: isPlaying || isExporting,
+              className: `w-full py-2.5 px-4 rounded-md text-sm font-medium transition-colors duration-150 focus:outline-none ${selectedToneType === tone.id ? 'bg-violet-600 text-white shadow-md' : 'text-gray-300 hover:bg-gray-600 hover:text-white'} disabled:opacity-60 disabled:cursor-not-allowed`
+            }, tone.label))
+          ),
+
+          React.createElement("div", { className: "p-4 bg-gray-700/50 rounded-lg" },
+            React.createElement("h3", { className: "text-lg font-medium text-gray-200 mb-3" }, "Presets"),
+            React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-2" },
+              presets.map(p => React.createElement("button", {
+                key: p.id, onClick: () => onPresetSelect(p.id), disabled: isExporting,
+                title: p.description,
+                className: "px-3 py-2 text-xs font-medium text-center text-white bg-violet-500 rounded-lg hover:bg-violet-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed truncate"
+              }, p.name))
+            )
+          ),
+
+          React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 p-4 bg-gray-700/50 rounded-lg" }, renderSettingsInputs()),
+
+          React.createElement("div", { className: "p-4 bg-gray-700/50 rounded-lg" },
+            React.createElement("label", { htmlFor:"volume", className:"block text-sm font-medium text-gray-300 mb-1" }, "Master Volume"),
+            React.createElement("div", { className:"flex items-center space-x-3" },
+              React.createElement("input", {
+                id:"volume", type:"range", min:0, max:1, step:0.01, value: volume,
+                onChange: e => onVolumeChange(parseFloat(e.target.value)),
+                disabled: isExporting,
+                className: "w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+              }),
+              React.createElement("span", { className: "text-sm text-gray-400 w-12 text-right" }, `${(volume*100).toFixed(0)}%`)
+            )
+          ),
+
+          React.createElement("div", { className: "flex justify-center items-center space-x-4 pt-4" },
+            React.createElement("button", {
+              onClick: onPlayToggle, disabled: isExporting,
+              "aria-label": isPlaying ? 'Pause' : 'Play',
+              className: `p-4 rounded-full transition-all duration-150 focus:outline-none ${isPlaying ? 'bg-teal-500 text-white' : 'bg-green-500 text-white'} disabled:opacity-60 disabled:cursor-not-allowed`
+            }, isPlaying ? "Pause" : "Play"),
+            React.createElement("button", {
+              onClick: () => { if (isPlaying) onPlayToggle(); }, disabled: !isPlaying || isExporting,
+              className: "p-4 bg-red-500 text-white rounded-full transition-all duration-150 hover:bg-red-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            }, "Stop")
+          ),
+
+          React.createElement("div", { className: "mt-6 pt-6 border-t border-gray-700 space-y-4 p-4 bg-gray-700/50 rounded-lg" },
+            React.createElement("h3", { className: "text-lg font-medium text-gray-200" }, "Export Audio"),
+            React.createElement(ParameterInput, { label:"Duration (minutes)", id:"exportDuration", value: exportDuration, onChange: onExportDurationChange, min: MIN_EXPORT_DURATION_MINUTES, max: MAX_EXPORT_DURATION_MINUTES, step:1, unit:"min" }),
+            React.createElement("button", {
+              onClick: onExport, disabled: isPlaying || isExporting,
+              className: "w-full py-2.5 px-4 rounded-md text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            }, isExporting ? "Exporting..." : "Export as WAV"),
+            React.createElement("p", { className: "text-xs text-gray-400 text-center export-status" }, exportStatusMessage)
+          ),
+
+          React.createElement("div", { className: "mt-6 pt-6 border-t border-gray-700 p-4 bg-gray-700/50 rounded-lg" },
+            React.createElement("button", {
+              onClick: () => setIsInfoExpanded(!isInfoExpanded),
+              className: "w-full text-left text-lg font-medium text-gray-200 hover:text-violet-400 transition-colors flex justify-between items-center",
+              "aria-expanded": isInfoExpanded
+            }, "Informações sobre Frequências Sonoras",
+              React.createElement("svg", { className: `w-5 h-5 transform ${isInfoExpanded ? 'rotate-180' : 'rotate-0'}`, fill:"none", stroke:"currentColor", viewBox:"0 0 24 24" },
+                React.createElement("path", { strokeLinecap:"round", strokeLinejoin:"round", strokeWidth:"2", d:"M19 9l-7 7-7-7" })
+              )
+            ),
+            isInfoExpanded && React.createElement("div", { className: "mt-3 text-xs text-gray-400 space-y-2" },
+              React.createElement("p", null, "As frequências sonoras (Hz) têm usos em áudio e terapias sonoras; use com responsabilidade."),
+              React.createElement("ul", { className: "list-disc list-inside pl-2" },
+                React.createElement("li", null, React.createElement("strong", null, "174 Hz:"), " Alívio de estresse."),
+                React.createElement("li", null, React.createElement("strong", null, "396 Hz:"), " Liberação de medo."),
+                React.createElement("li", null, React.createElement("strong", null, "528 Hz:"), " Transformação emocional.")
+              )
+            )
+          )
+        )
+      );
+    }
+
+    /************ App Component ************/
+    function App() {
+      const [selectedToneType, setSelectedToneType] = React.useState(ToneType.ISOCHRONIC);
+      const [isochronicSettings, setIsochronicSettings] = React.useState(DEFAULT_ISOCHRONIC_SETTINGS);
+      const [binauralSettings, setBinauralSettings] = React.useState(DEFAULT_BINAURAL_SETTINGS);
+      const [monauralSettings, setMonauralSettings] = React.useState(DEFAULT_MONAURAL_SETTINGS);
+      const [volume, setVolume] = React.useState(DEFAULT_VOLUME);
+
+      const [exportDuration, setExportDuration] = React.useState(DEFAULT_EXPORT_DURATION_MINUTES);
+      const [isExporting, setIsExporting] = React.useState(false);
+      const [exportStatusMessage, setExportStatusMessage] = React.useState("");
+
+      const audio = useAudioEngine();
+      const { play, stop, isPlaying, setGlobalVolume, exportAudioAsWav } = audio;
+
+      const getCurrentSettings = React.useCallback(() => {
+        switch (selectedToneType) {
+          case ToneType.ISOCHRONIC: return isochronicSettings;
+          case ToneType.BINAURAL: return binauralSettings;
+          case ToneType.MONAURAL: return monauralSettings;
+          default: return DEFAULT_ISOCHRONIC_SETTINGS;
+        }
+      }, [selectedToneType, isochronicSettings, binauralSettings, monauralSettings]);
+
+      const handlePlayToggle = React.useCallback(() => {
+        if (isExporting) return;
+        if (isPlaying) stop();
+        else play(selectedToneType, getCurrentSettings(), volume);
+      }, [isPlaying, play, stop, selectedToneType, getCurrentSettings, volume, isExporting]);
+
+      React.useEffect(() => {
+        if (isPlaying && !isExporting) {
+          play(selectedToneType, getCurrentSettings(), volume);
+        }
+        // eslint-disable-next-line
+      }, [selectedToneType, isochronicSettings, binauralSettings, monauralSettings, volume]);
+
+      React.useEffect(() => { return () => { if (isPlaying) stop(); }; }, [stop, isPlaying]);
+
+      const updateSettings = (newSettings) => {
+        if (isExporting) return;
+        switch (selectedToneType) {
+          case ToneType.ISOCHRONIC: setIsochronicSettings(prev => ({...prev, ...newSettings})); break;
+          case ToneType.BINAURAL: setBinauralSettings(prev => ({...prev, ...newSettings})); break;
+          case ToneType.MONAURAL: setMonauralSettings(prev => ({...prev, ...newSettings})); break;
+        }
+      };
+
+      const handleToneTypeChange = (type) => { if (isPlaying || isExporting) return; setSelectedToneType(type); };
+
+      const handleVolumeChange = (vol) => { if (isExporting) return; setVolume(vol); setGlobalVolume(vol); };
+
+      const handleExportDurationChange = (dur) => {
+        if (isExporting) return;
+        let newDur = Math.max(MIN_EXPORT_DURATION_MINUTES, Math.min(dur, MAX_EXPORT_DURATION_MINUTES));
+        if (isNaN(newDur) || !isFinite(newDur)) newDur = DEFAULT_EXPORT_DURATION_MINUTES;
+        setExportDuration(newDur);
+      };
+
+      const handleExport = React.useCallback(async () => {
+        if (isExporting || isPlaying) {
+          setExportStatusMessage(isPlaying ? "Pare a reprodução antes de exportar." : "Exportação já em andamento.");
+          return;
+        }
+
+        setIsExporting(true);
+        setExportStatusMessage("Inicializando exportação...");
+        try {
+          setExportStatusMessage("Renderizando áudio... Aguarde.");
+          await exportAudioAsWav(selectedToneType, getCurrentSettings(), volume, exportDuration * 60);
+          setExportStatusMessage("Exportação concluída! Verifique seus downloads.");
+        } catch (err) {
+          console.error("Export failed:", err);
+          setExportStatusMessage(`Falha na exportação: ${err.message || 'Erro desconhecido'}`);
+        } finally {
+          setIsExporting(false);
+          setTimeout(()=>setExportStatusMessage(""), 7000);
+        }
+      }, [isExporting, isPlaying, exportAudioAsWav, selectedToneType, getCurrentSettings, volume, exportDuration]);
+
+      const handlePresetSelect = React.useCallback((presetId) => {
+        if (isExporting) return;
+        const preset = PRESETS.find(p => p.id === presetId);
+        if (!preset) return;
+        setSelectedToneType(preset.toneType);
+        switch (preset.toneType) {
+          case ToneType.ISOCHRONIC: setIsochronicSettings(preset.settings); break;
+          case ToneType.BINAURAL: setBinauralSettings(preset.settings); break;
+          case ToneType.MONAURAL: setMonauralSettings(preset.settings); break;
+        }
+      }, [isExporting]);
+
+      return (
+        React.createElement("div", { className: "min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4" },
+          React.createElement("div", { className: "w-full max-w-2xl bg-gray-800 shadow-2xl rounded-xl p-6 md:p-8" },
+            React.createElement("header", { className: "mb-8 text-center" },
+              React.createElement("h1", { className: "text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-500" }, "Aura Harmonics"),
+              React.createElement("p", { className: "text-gray-400 mt-2" }, "Craft your auditory experience for focus, relaxation, or meditation.")
+            ),
+            React.createElement("main", null,
+              React.createElement(ControlPanel, {
+                toneTypesConfig: TONE_TYPES_CONFIG,
+                selectedToneType,
+                onToneTypeChange: handleToneTypeChange,
+                settings: getCurrentSettings(),
+                onSettingsChange: updateSettings,
+                volume,
+                onVolumeChange: handleVolumeChange,
+                onPlayToggle: handlePlayToggle,
+                isPlaying,
+                onExport: handleExport,
+                exportDuration,
+                onExportDurationChange: handleExportDurationChange,
+                isExporting,
+                exportStatusMessage,
+                presets: PRESETS,
+                onPresetSelect: handlePresetSelect
+              })
+            ),
+            React.createElement("footer", { className: "mt-8 text-center text-gray-500 text-sm" },
+              React.createElement("p", null, `© ${new Date().getFullYear()} Aura Harmonics. All rights reserved.`),
+              React.createElement("p", { className: "mt-1" }, "Experiment responsibly. Not a medical device.")
+            )
+          )
+        )
+      );
+    }
+
+    /************ Mount App ************/
+    const rootEl = document.getElementById('root');
+    const root = createRoot(rootEl);
+    root.render(React.createElement(React.StrictMode, null, React.createElement(App, null)));
+  </script>
+</body>
+</html>
