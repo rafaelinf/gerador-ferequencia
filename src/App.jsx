@@ -86,7 +86,7 @@ export default function App() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-3">
               <Headphones className="w-8 h-8 text-violet-600" />
-              <h1 className="text-2xl font-bold text-gray-900">Aura Harmonics</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Instituto Luz de Lótus - Aura Harmonics</h1>
             </div>
             <div className="flex items-center space-x-2 text-sm text-gray-500">
               <Download className="w-4 h-4" />
@@ -119,7 +119,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center text-sm text-gray-500">
             <p>
-              Aura Harmonics - Gerador de Frequências Sonoras
+              Instituto Luz de Lótus - Aura Harmonics - Gerador de Frequências Sonoras
             </p>
             <p className="mt-2">
               Use com responsabilidade. As frequências sonoras podem ter efeitos terapêuticos.
