@@ -1,75 +1,25 @@
-import { useState, useCallback, useEffect } from 'react';
-import { ControlPanel } from './components/ControlPanel';
-import { useAudioEngine } from './hooks/useAudioEngine';
-import {
-  ToneType,
-  DEFAULT_VOLUME,
-  DEFAULT_ISOCHRONIC_SETTINGS,
-  DEFAULT_BINAURAL_SETTINGS,
-  DEFAULT_MONAURAL_SETTINGS,
-  TONE_TYPES_CONFIG,
-  DEFAULT_EXPORT_DURATION_MINUTES,
-  MIN_EXPORT_DURATION_MINUTES,
-  MAX_EXPORT_DURATION_MINUTES,
-  PRESETS
-} from './constants';
+import React, { useState, useCallback } from 'react';
+import { Headphones, Download } from 'lucide-react';
+import ControlPanel from './components/ControlPanel';
+import { ToneType, DEFAULT_ISOCHRONIC_SETTINGS, DEFAULT_BINAURAL_SETTINGS, DEFAULT_MONAURAL_SETTINGS } from './constants';
 
 export default function App() {
+  // Estados para frequências
   const [selectedToneType, setSelectedToneType] = useState(ToneType.ISOCHRONIC);
   const [isochronicSettings, setIsochronicSettings] = useState(DEFAULT_ISOCHRONIC_SETTINGS);
   const [binauralSettings, setBinauralSettings] = useState(DEFAULT_BINAURAL_SETTINGS);
   const [monauralSettings, setMonauralSettings] = useState(DEFAULT_MONAURAL_SETTINGS);
-  const [volume, setVolume] = useState(DEFAULT_VOLUME);
+  const [volume, setVolume] = useState(0.5);
 
-  const [exportDuration, setExportDuration] = useState(DEFAULT_EXPORT_DURATION_MINUTES);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportStatusMessage, setExportStatusMessage] = useState("");
+  // Estados para música
+  const [audioFile, setAudioFile] = useState(null);
 
-  const audio = useAudioEngine();
-  const { play, stop, isPlaying, setGlobalVolume, exportAudioAsWav } = audio;
+  // Handlers para frequências
+  const handleToneTypeChange = useCallback((type) => {
+    setSelectedToneType(type);
+  }, []);
 
-  const getCurrentSettings = useCallback(() => {
-    switch (selectedToneType) {
-      case ToneType.ISOCHRONIC:
-        return isochronicSettings;
-      case ToneType.BINAURAL:
-        return binauralSettings;
-      case ToneType.MONAURAL:
-        return monauralSettings;
-      default:
-        return DEFAULT_ISOCHRONIC_SETTINGS;
-    }
-  }, [selectedToneType, isochronicSettings, binauralSettings, monauralSettings]);
-
-  const handlePlayToggle = useCallback(() => {
-    if (isExporting) return;
-    
-    if (isPlaying) {
-      stop();
-    } else {
-      play(selectedToneType, getCurrentSettings(), volume);
-    }
-  }, [isPlaying, play, stop, selectedToneType, getCurrentSettings, volume, isExporting]);
-
-  // Atualiza o áudio quando as configurações mudam
-  useEffect(() => {
-    if (isPlaying && !isExporting) {
-      play(selectedToneType, getCurrentSettings(), volume);
-    }
-  }, [selectedToneType, isochronicSettings, binauralSettings, monauralSettings, volume, isPlaying, isExporting, play, getCurrentSettings]);
-
-  // Para o áudio quando o componente é desmontado
-  useEffect(() => {
-    return () => {
-      if (isPlaying) {
-        stop();
-      }
-    };
-  }, [stop, isPlaying]);
-
-  const updateSettings = (newSettings) => {
-    if (isExporting) return;
-    
+  const handleSettingsChange = useCallback((newSettings) => {
     switch (selectedToneType) {
       case ToneType.ISOCHRONIC:
         setIsochronicSettings(prev => ({ ...prev, ...newSettings }));
@@ -81,122 +31,102 @@ export default function App() {
         setMonauralSettings(prev => ({ ...prev, ...newSettings }));
         break;
     }
-  };
+  }, [selectedToneType]);
 
-  const handleToneTypeChange = (type) => {
-    if (isPlaying || isExporting) return;
-    setSelectedToneType(type);
-  };
-
-  const handleVolumeChange = (vol) => {
-    if (isExporting) return;
+  const handleVolumeChange = useCallback((vol) => {
     setVolume(vol);
-    setGlobalVolume(vol);
-  };
+  }, []);
 
-  const handleExportDurationChange = (dur) => {
-    if (isExporting) return;
-    
-    let newDur = Math.max(MIN_EXPORT_DURATION_MINUTES, Math.min(dur, MAX_EXPORT_DURATION_MINUTES));
-    if (isNaN(newDur) || !isFinite(newDur)) {
-      newDur = DEFAULT_EXPORT_DURATION_MINUTES;
-    }
-    setExportDuration(newDur);
-  };
+  // Handlers para música
+  const handleMusicLoaded = useCallback((file) => {
+    setAudioFile(file);
+  }, []);
 
-  const handleExport = useCallback(async () => {
-    if (isExporting || isPlaying) {
-      setExportStatusMessage(
-        isPlaying 
-          ? "Pare a reprodução antes de exportar." 
-          : "Exportação já em andamento."
-      );
-      return;
-    }
+  const handleMusicPlayPause = useCallback((isPlaying) => {
+    // Aqui você pode adicionar lógica adicional se necessário
+    console.log('Música:', isPlaying ? 'tocando' : 'pausada');
+  }, []);
 
-    setIsExporting(true);
-    setExportStatusMessage("Inicializando exportação...");
-    
-    try {
-      setExportStatusMessage("Renderizando áudio... Aguarde.");
-      await exportAudioAsWav(
-        selectedToneType, 
-        getCurrentSettings(), 
-        volume, 
-        exportDuration * 60
-      );
-      setExportStatusMessage("Exportação concluída! Verifique seus downloads.");
-    } catch (err) {
-      console.error("Export failed:", err);
-      setExportStatusMessage(`Falha na exportação: ${err.message || 'Erro desconhecido'}`);
-    } finally {
-      setIsExporting(false);
-      setTimeout(() => setExportStatusMessage(""), 7000);
-    }
-  }, [isExporting, isPlaying, exportAudioAsWav, selectedToneType, getCurrentSettings, volume, exportDuration]);
+  const handleMusicStop = useCallback(() => {
+    // Aqui você pode adicionar lógica adicional se necessário
+    console.log('Música parada');
+  }, []);
 
-  const handlePresetSelect = useCallback((presetId) => {
-    if (isExporting) return;
-    
-    const preset = PRESETS.find(p => p.id === presetId);
-    if (!preset) return;
-    
-    setSelectedToneType(preset.toneType);
-    
-    switch (preset.toneType) {
+  const handleMusicVolumeChange = useCallback((vol) => {
+    // Aqui você pode adicionar lógica adicional se necessário
+    console.log('Volume da música:', vol);
+  }, []);
+
+  // Handler para exportação
+  const handleExport = useCallback((exportData) => {
+    console.log('Exportando mix:', exportData);
+    // Aqui você pode implementar a lógica de exportação
+    alert('Funcionalidade de exportação será implementada em breve!');
+  }, []);
+
+  // Obter configurações atuais
+  const getCurrentSettings = () => {
+    switch (selectedToneType) {
       case ToneType.ISOCHRONIC:
-        setIsochronicSettings(preset.settings);
-        break;
+        return isochronicSettings;
       case ToneType.BINAURAL:
-        setBinauralSettings(preset.settings);
-        break;
+        return binauralSettings;
       case ToneType.MONAURAL:
-        setMonauralSettings(preset.settings);
-        break;
+        return monauralSettings;
+      default:
+        return DEFAULT_ISOCHRONIC_SETTINGS;
     }
-  }, [isExporting]);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-gray-800 shadow-2xl rounded-xl p-6 md:p-8">
-        {/* Header */}
-        <header className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-500">
-            Aura Harmonics
-          </h1>
-          <p className="text-gray-400 mt-2">
-            Crie sua experiência auditiva para foco, relaxamento ou meditação.
-          </p>
-        </header>
+    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-fuchsia-50 to-teal-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-3">
+              <Headphones className="w-8 h-8 text-violet-600" />
+              <h1 className="text-2xl font-bold text-gray-900">Aura Harmonics</h1>
+            </div>
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <Download className="w-4 h-4" />
+              <span>Gerador de Frequências</span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        {/* Main Content */}
-        <main>
-          <ControlPanel
-            toneTypesConfig={TONE_TYPES_CONFIG}
-            selectedToneType={selectedToneType}
-            onToneTypeChange={handleToneTypeChange}
-            settings={getCurrentSettings()}
-            onSettingsChange={updateSettings}
-            volume={volume}
-            onVolumeChange={handleVolumeChange}
-            onPlayToggle={handlePlayToggle}
-            isPlaying={isPlaying}
-            onExport={handleExport}
-            exportDuration={exportDuration}
-            onExportDurationChange={handleExportDurationChange}
-            isExporting={isExporting}
-            exportStatusMessage={exportStatusMessage}
-            presets={PRESETS}
-            onPresetSelect={handlePresetSelect}
-          />
-        </main>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <ControlPanel
+          selectedToneType={selectedToneType}
+          onToneTypeChange={handleToneTypeChange}
+          settings={getCurrentSettings()}
+          onSettingsChange={handleSettingsChange}
+          volume={volume}
+          onVolumeChange={handleVolumeChange}
+          audioFile={audioFile}
+          onMusicLoaded={handleMusicLoaded}
+          onMusicPlayPause={handleMusicPlayPause}
+          onMusicStop={handleMusicStop}
+          onMusicVolumeChange={handleMusicVolumeChange}
+          onExport={handleExport}
+        />
+      </main>
 
-        {/* Footer */}
-        <footer className="mt-8 text-center text-gray-500 text-sm">
-          <p>© {new Date().getFullYear()} Aura Harmonics. Todos os direitos reservados.</p>
-          <p className="mt-1">Experimente com responsabilidade. Não é um dispositivo médico.</p>
-        </footer>
-      </div>
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center text-sm text-gray-500">
+            <p>
+              Aura Harmonics - Gerador de Frequências Sonoras
+            </p>
+            <p className="mt-2">
+              Use com responsabilidade. As frequências sonoras podem ter efeitos terapêuticos.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

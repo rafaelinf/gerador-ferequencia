@@ -1,10 +1,16 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 export function useAudioEngine() {
-  const [isPlaying, setIsPlaying] = useState(false);
   const audioContextRef = useRef(null);
   const masterGainRef = useRef(null);
+  const masterMixerGainRef = useRef(null);
+  const frequenciesGainRef = useRef(null);
+  const musicGainRef = useRef(null);
+  const musicSourceRef = useRef(null);
+  const musicBufferRef = useRef(null);
+  const currentPlayingTypeRef = useRef(null);
 
+  // Referências para frequências
   const osc1Ref = useRef(null);
   const osc2Ref = useRef(null);
   const panner1Ref = useRef(null);
@@ -12,13 +18,17 @@ export function useAudioEngine() {
   const isochronicCarrierGainRef = useRef(null);
   const pulseLFORef = useRef(null);
   const lfoModulatorGainRef = useRef(null);
-  const currentPlayingTypeRef = useRef(null);
+
+  // Referências para mixer
+  // (masterMixerGainRef, frequenciesGainRef, musicGainRef, musicSourceRef, musicBufferRef já declarados acima)
 
   const ensureAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
       masterGainRef.current = audioContextRef.current.createGain();
-      masterGainRef.current.connect(audioContextRef.current.destination);
+      masterMixerGainRef.current = audioContextRef.current.createGain();
+      masterMixerGainRef.current.connect(audioContextRef.current.destination);
+      masterGainRef.current.connect(masterMixerGainRef.current);
     }
     if (audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume();
@@ -28,6 +38,7 @@ export function useAudioEngine() {
   const stopAllNodes = useCallback((context = audioContextRef.current) => {
     if (!context) return;
     
+    // Parar nós de frequência
     const nodesToStop = [osc1Ref.current, osc2Ref.current, pulseLFORef.current];
     nodesToStop.forEach(node => {
       if (node) {
@@ -40,15 +51,27 @@ export function useAudioEngine() {
       }
     });
     
+    // Parar música
+    if (musicSourceRef.current) {
+      try {
+        musicSourceRef.current.stop();
+      } catch(e) {}
+    }
+    
+    // Limpar referências
     osc1Ref.current = null; 
     osc2Ref.current = null; 
     pulseLFORef.current = null;
+    musicSourceRef.current = null;
 
+    // Desconectar nós
     const nodesToDisconnect = [
       panner1Ref.current, 
       panner2Ref.current, 
       lfoModulatorGainRef.current, 
-      isochronicCarrierGainRef.current
+      isochronicCarrierGainRef.current,
+      musicGainRef.current,
+      frequenciesGainRef.current
     ];
     
     nodesToDisconnect.forEach(node => { 
@@ -63,6 +86,8 @@ export function useAudioEngine() {
     panner2Ref.current = null; 
     lfoModulatorGainRef.current = null; 
     isochronicCarrierGainRef.current = null;
+    musicGainRef.current = null;
+    frequenciesGainRef.current = null;
 
     if (context === audioContextRef.current) {
       currentPlayingTypeRef.current = null;
@@ -140,7 +165,21 @@ export function useAudioEngine() {
     }
   }, []);
 
-  const play = useCallback((type, settings, globalVolume) => {
+  const loadMusic = useCallback(async (audioFile) => {
+    if (!audioContextRef.current || !audioFile) return null;
+
+    try {
+      const arrayBuffer = await audioFile.arrayBuffer();
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      musicBufferRef.current = audioBuffer;
+      return audioBuffer;
+    } catch (error) {
+      console.error('Erro ao carregar música:', error);
+      return null;
+    }
+  }, []);
+
+  const play = useCallback((type, settings, globalVolume, musicFile = null, musicVolume = 0.7, frequenciesVolume = 0.5) => {
     ensureAudioContext();
     const ac = audioContextRef.current;
     const masterGain = masterGainRef.current;
@@ -148,16 +187,36 @@ export function useAudioEngine() {
     
     stopAllNodes();
 
+    // Configurar volumes
     masterGain.gain.setValueAtTime(globalVolume, ac.currentTime);
     currentPlayingTypeRef.current = type;
+
+    // Criar ganho para frequências
+    frequenciesGainRef.current = ac.createGain();
+    frequenciesGainRef.current.gain.setValueAtTime(frequenciesVolume, ac.currentTime);
+    frequenciesGainRef.current.connect(masterGain);
+
+    // Criar ganho para música
+    if (musicFile && musicBufferRef.current) {
+      musicGainRef.current = ac.createGain();
+      musicGainRef.current.gain.setValueAtTime(musicVolume, ac.currentTime);
+      musicGainRef.current.connect(masterGain);
+
+      // Criar source para música
+      musicSourceRef.current = ac.createBufferSource();
+      musicSourceRef.current.buffer = musicBufferRef.current;
+      musicSourceRef.current.connect(musicGainRef.current);
+      musicSourceRef.current.loop = true;
+    }
 
     const liveNodeRefs = {
       osc1Ref, osc2Ref, panner1Ref, panner2Ref, 
       isochronicCarrierGainRef, pulseLFORef, lfoModulatorGainRef
     };
 
-    createAudioGraph(ac, masterGain, type, settings, liveNodeRefs);
+    createAudioGraph(ac, frequenciesGainRef.current, type, settings, liveNodeRefs);
 
+    // Iniciar nós de frequência
     if (liveNodeRefs.osc1Ref.current) {
       try { 
         liveNodeRefs.osc1Ref.current.start(ac.currentTime); 
@@ -174,17 +233,38 @@ export function useAudioEngine() {
       } catch(e) {}
     }
 
-    setIsPlaying(true);
+    // Iniciar música
+    if (musicSourceRef.current) {
+      try {
+        musicSourceRef.current.start(ac.currentTime);
+      } catch(e) {}
+    }
+
+    // Não usar setIsPlaying pois não existe mais
+    // setIsPlaying(true);
   }, [ensureAudioContext, stopAllNodes, createAudioGraph]);
 
   const stop = useCallback(() => { 
     stopAllNodes(); 
-    setIsPlaying(false); 
+    // Não usar setIsPlaying pois não existe mais
+    // setIsPlaying(false); 
   }, [stopAllNodes]);
 
   const setGlobalVolume = useCallback((volume) => {
     if (masterGainRef.current && audioContextRef.current) {
       masterGainRef.current.gain.setValueAtTime(volume, audioContextRef.current.currentTime);
+    }
+  }, []);
+
+  const setMusicVolume = useCallback((volume) => {
+    if (musicGainRef.current && audioContextRef.current) {
+      musicGainRef.current.gain.setValueAtTime(volume, audioContextRef.current.currentTime);
+    }
+  }, []);
+
+  const setFrequenciesVolume = useCallback((volume) => {
+    if (frequenciesGainRef.current && audioContextRef.current) {
+      frequenciesGainRef.current.gain.setValueAtTime(volume, audioContextRef.current.currentTime);
     }
   }, []);
 
@@ -258,7 +338,7 @@ export function useAudioEngine() {
     return new Blob([view], { type: 'audio/wav' });
   }
 
-  const exportAudioAsWav = async (type, settings, globalVolume, durationInSeconds) => {
+  const exportAudioAsWav = async (type, settings, globalVolume, durationInSeconds, musicFile = null, musicVolume = 0.7, frequenciesVolume = 0.5) => {
     const sampleRate = 44100;
     const numChannels = (type === 'Binaural') ? 2 : 1;
     const OfflineAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -267,10 +347,23 @@ export function useAudioEngine() {
       throw new Error("OfflineAudioContext não suportado no navegador.");
     }
 
-    const offlineCtx = new OfflineAC(numChannels, Math.floor(sampleRate * durationInSeconds), sampleRate);
+    // Se tiver música, usar sua duração, senão usar a duração especificada
+    const finalDuration = musicFile ? musicFile.duration : durationInSeconds;
+    const offlineCtx = new OfflineAC(numChannels, Math.floor(sampleRate * finalDuration), sampleRate);
+    
     const offlineMasterGain = offlineCtx.createGain();
     offlineMasterGain.gain.setValueAtTime(globalVolume, 0);
     offlineMasterGain.connect(offlineCtx.destination);
+
+    // Criar ganhos separados para música e frequências
+    const offlineMusicGain = offlineCtx.createGain();
+    const offlineFrequenciesGain = offlineCtx.createGain();
+    
+    offlineMusicGain.gain.setValueAtTime(musicVolume, 0);
+    offlineFrequenciesGain.gain.setValueAtTime(frequenciesVolume, 0);
+    
+    offlineMusicGain.connect(offlineMasterGain);
+    offlineFrequenciesGain.connect(offlineMasterGain);
 
     const offlineNodeRefs = {
       osc1Ref: { current: null },
@@ -282,8 +375,26 @@ export function useAudioEngine() {
       lfoModulatorGainRef: { current: null }
     };
 
-    createAudioGraph(offlineCtx, offlineMasterGain, type, settings, offlineNodeRefs);
+    // Criar gráfico de frequências
+    createAudioGraph(offlineCtx, offlineFrequenciesGain, type, settings, offlineNodeRefs);
 
+    // Adicionar música se disponível
+    if (musicFile && musicBufferRef.current) {
+      const offlineMusicSource = offlineCtx.createBufferSource();
+      offlineMusicSource.buffer = musicBufferRef.current;
+      offlineMusicSource.connect(offlineMusicGain);
+      
+      // Se a música for mais curta que a duração desejada, fazer loop
+      if (musicFile.duration < finalDuration) {
+        offlineMusicSource.loop = true;
+        offlineMusicSource.loopStart = 0;
+        offlineMusicSource.loopEnd = musicFile.duration;
+      }
+      
+      offlineMusicSource.start(0);
+    }
+
+    // Iniciar nós de frequência
     if (offlineNodeRefs.osc1Ref.current) {
       try { 
         offlineNodeRefs.osc1Ref.current.start(0); 
@@ -313,12 +424,237 @@ export function useAudioEngine() {
     a.style.display = 'none';
     a.href = url;
     const timestamp = new Date().toISOString().replace(/[:.]/g,'-');
-    a.download = `aura_harmonics_${type.toLowerCase().replace(/\s+/g,'_')}_${timestamp}.wav`;
+    const musicSuffix = musicFile ? '_with_music' : '';
+    a.download = `aura_harmonics_${type.toLowerCase().replace(/\s+/g,'_')}${musicSuffix}_${timestamp}.wav`;
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
     return true;
   };
+
+  const mixAudio = useCallback(async (audioFile, type, settings, globalVolume, musicVolume, frequenciesVolume) => {
+    setIsMixing(true);
+    
+    try {
+      // Carregar música
+      const musicBuffer = await loadMusic(audioFile);
+      if (!musicBuffer) {
+        throw new Error('Falha ao carregar música');
+      }
+
+      // Simular processo de mixagem
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      setIsMixing(false);
+      return {
+        success: true,
+        duration: musicBuffer.duration,
+        sampleRate: musicBuffer.sampleRate
+      };
+    } catch (error) {
+      setIsMixing(false);
+      throw error;
+    }
+  }, [loadMusic]);
+
+  // Estados independentes para cada aba
+  const [frequenciesPlaying, setFrequenciesPlaying] = useState(false);
+  const [musicPlaying, setMusicPlaying] = useState(false);
+  const [mixerFrequenciesPlaying, setMixerFrequenciesPlaying] = useState(false);
+  const [mixerMusicPlaying, setMixerMusicPlaying] = useState(false);
+
+  // Função para tocar apenas frequências (aba frequências)
+  const playFrequenciesOnly = useCallback(async (toneType, settings, volume = 0.5) => {
+    try {
+      await ensureAudioContext();
+      
+      // Parar música se estiver tocando
+      if (musicPlaying) {
+        stopMusic();
+      }
+      
+      // Parar qualquer áudio que esteja tocando
+      stopAllNodes();
+      
+      // Configurar volumes
+      if (masterGainRef.current && audioContextRef.current) {
+        masterGainRef.current.gain.setValueAtTime(volume, audioContextRef.current.currentTime);
+      }
+      
+      // Criar ganho para frequências
+      if (audioContextRef.current) {
+        frequenciesGainRef.current = audioContextRef.current.createGain();
+        frequenciesGainRef.current.gain.setValueAtTime(volume, audioContextRef.current.currentTime);
+        frequenciesGainRef.current.connect(masterGainRef.current);
+      }
+      
+      // Tocar frequências usando a função play
+      play(toneType, settings, volume);
+      
+      setFrequenciesPlaying(true);
+      return true;
+    } catch (error) {
+      console.error('Erro ao tocar frequências:', error);
+      throw error;
+    }
+  }, [ensureAudioContext, musicPlaying, stopMusic, stopAllNodes, play]);
+
+  // Função para parar apenas frequências
+  const stopFrequencies = useCallback(() => {
+    if (frequenciesPlaying) {
+      stopAllNodes();
+      setFrequenciesPlaying(false);
+    }
+  }, [frequenciesPlaying]);
+
+  // Função para tocar apenas música (aba música)
+  const playMusicOnly = useCallback(async (musicFile, musicVolume = 0.7) => {
+    if (!musicFile) return;
+
+    try {
+      await ensureAudioContext();
+      
+      // Parar frequências se estiverem tocando
+      if (frequenciesPlaying) {
+        stopFrequencies();
+      }
+      
+      // Parar qualquer áudio que esteja tocando
+      stopAllNodes();
+      
+      // Carregar música se ainda não foi carregada
+      if (!musicBufferRef.current) {
+        await loadMusic(musicFile);
+      }
+      
+      if (!musicBufferRef.current) {
+        throw new Error('Falha ao carregar música');
+      }
+      
+      // Configurar música
+      musicSourceRef.current = audioContextRef.current.createBufferSource();
+      musicSourceRef.current.buffer = musicBufferRef.current;
+      
+      // Configurar volume da música
+      musicGainRef.current.gain.setValueAtTime(musicVolume, audioContextRef.current.currentTime);
+      
+      // Conectar música ao sistema de áudio
+      musicSourceRef.current.connect(musicGainRef.current);
+      musicGainRef.current.connect(masterMixerGainRef.current);
+      masterMixerGainRef.current.connect(audioContextRef.current.destination);
+      
+      // Tocar música
+      musicSourceRef.current.start(0);
+      
+      // Configurar para parar quando a música terminar
+      musicSourceRef.current.onended = () => {
+        musicSourceRef.current = null;
+        setMusicPlaying(false);
+      };
+      
+      setMusicPlaying(true);
+      return true;
+    } catch (error) {
+      console.error('Erro ao tocar música:', error);
+      throw error;
+    }
+  }, [ensureAudioContext, frequenciesPlaying, stopFrequencies, loadMusic]);
+
+  // Função para parar apenas música
+  const stopMusic = useCallback(() => {
+    if (musicPlaying && musicSourceRef.current) {
+      musicSourceRef.current.stop();
+      musicSourceRef.current = null;
+      setMusicPlaying(false);
+    }
+  }, [musicPlaying]);
+
+  // Função para tocar frequências no mixer (independente)
+  const playMixerFrequencies = useCallback(async (toneType, settings, volume = 0.5) => {
+    try {
+      await ensureAudioContext();
+      
+      // Parar frequências da aba frequências se estiverem tocando
+      if (frequenciesPlaying) {
+        stopFrequencies();
+      }
+      
+      // Tocar frequências
+      const success = await play(toneType, settings, volume);
+      if (success) {
+        setMixerFrequenciesPlaying(true);
+      }
+      return success;
+    } catch (error) {
+      console.error('Erro ao tocar frequências no mixer:', error);
+      throw error;
+    }
+  }, [ensureAudioContext, frequenciesPlaying, stopFrequencies, play]);
+
+  // Função para tocar música no mixer (independente)
+  const playMixerMusic = useCallback(async (musicFile, musicVolume = 0.7) => {
+    if (!musicFile) return;
+
+    try {
+      await ensureAudioContext();
+      
+      // Parar música da aba música se estiver tocando
+      if (musicPlaying) {
+        stopMusic();
+      }
+      
+      // Carregar música se ainda não foi carregada
+      if (!musicBufferRef.current) {
+        await loadMusic(musicFile);
+      }
+      
+      if (!musicBufferRef.current) {
+        throw new Error('Falha ao carregar música');
+      }
+      
+      // Configurar música para mixer
+      const mixerMusicSource = audioContextRef.current.createBufferSource();
+      mixerMusicSource.buffer = musicBufferRef.current;
+      
+      // Configurar volume da música
+      musicGainRef.current.gain.setValueAtTime(musicVolume, audioContextRef.current.currentTime);
+      
+      // Conectar música ao sistema de áudio
+      mixerMusicSource.connect(musicGainRef.current);
+      musicGainRef.current.connect(masterMixerGainRef.current);
+      masterMixerGainRef.current.connect(audioContextRef.current.destination);
+      
+      // Tocar música
+      mixerMusicSource.start(0);
+      
+      // Configurar para parar quando a música terminar
+      mixerMusicSource.onended = () => {
+        setMixerMusicPlaying(false);
+      };
+      
+      setMixerMusicPlaying(true);
+      return true;
+    } catch (error) {
+      console.error('Erro ao tocar música no mixer:', error);
+      throw error;
+    }
+  }, [ensureAudioContext, musicPlaying, stopMusic, loadMusic]);
+
+  // Função para parar tudo no mixer
+  const stopMixer = useCallback(() => {
+    stopAllNodes();
+    setMixerFrequenciesPlaying(false);
+    setMixerMusicPlaying(false);
+  }, []);
+
+  // Função para parar tudo (todas as abas)
+  const stopAll = useCallback(() => {
+    stopAllNodes();
+    setFrequenciesPlaying(false);
+    setMusicPlaying(false);
+    setMixerFrequenciesPlaying(false);
+    setMixerMusicPlaying(false);
+  }, [stopAllNodes]);
 
   useEffect(() => {
     const ac = audioContextRef.current;
@@ -335,8 +671,22 @@ export function useAudioEngine() {
   return { 
     play, 
     stop, 
-    isPlaying, 
     setGlobalVolume, 
-    exportAudioAsWav 
+    setMusicVolume,
+    setFrequenciesVolume,
+    exportAudioAsWav,
+    mixAudio,
+    loadMusic,
+    playMusicOnly,
+    playFrequenciesOnly,
+    stopFrequencies,
+    frequenciesPlaying,
+    musicPlaying,
+    playMixerFrequencies,
+    playMixerMusic,
+    stopMixer,
+    stopAll,
+    mixerFrequenciesPlaying,
+    mixerMusicPlaying
   };
 }

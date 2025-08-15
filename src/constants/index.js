@@ -5,9 +5,21 @@ export const ToneType = {
 };
 
 export const DEFAULT_VOLUME = 0.5;
-export const DEFAULT_ISOCHRONIC_SETTINGS = { carrierFreq: 136.1, pulseFreq: 7.83 };
-export const DEFAULT_BINAURAL_SETTINGS = { baseFreq: 100, beatFreq: 10 };
-export const DEFAULT_MONAURAL_SETTINGS = { freq1: 200, freq2: 205 };
+export const DEFAULT_ISOCHRONIC_SETTINGS = { 
+  frequency: 136.1, 
+  modulationFrequency: 7.83, 
+  modulationDepth: 50, 
+  carrierVolume: 0.8 
+};
+
+export const DEFAULT_BINAURAL_SETTINGS = { 
+  leftFrequency: 100, 
+  rightFrequency: 110 
+};
+
+export const DEFAULT_MONAURAL_SETTINGS = { 
+  frequency: 200 
+};
 
 export const FREQUENCY_RANGES = {
   carrierFreq: { min: 20, max: 1500, step: 0.1 },
@@ -34,41 +46,41 @@ export const PRESETS = [
     name: "Foco (Alpha Binaurais)", 
     description: "Para clareza mental e concentração", 
     toneType: ToneType.BINAURAL, 
-    settings: { baseFreq: 100, beatFreq: 10 } 
+    settings: { leftFrequency: 100, rightFrequency: 110 } 
   },
   { 
     id: 'meditationThetaBinaural', 
     name: "Meditação (Theta Binaurais)", 
     description: "Relaxamento profundo e meditação", 
     toneType: ToneType.BINAURAL, 
-    settings: { baseFreq: 136.1, beatFreq: 6 } 
+    settings: { leftFrequency: 136.1, rightFrequency: 142.1 } 
   },
   { 
     id: 'solfeggio528Iso', 
     name: "Solfeggio 528Hz (Isocrônicos)", 
     description: "Equilíbrio emocional e transformação", 
     toneType: ToneType.ISOCHRONIC, 
-    settings: { carrierFreq: 528, pulseFreq: 7.83 } 
+    settings: { frequency: 528, modulationFrequency: 7.83, modulationDepth: 50, carrierVolume: 0.8 } 
   },
   { 
     id: 'solfeggio396Monaural', 
     name: "Solfeggio 396Hz (Monaurais)", 
     description: "Liberação de medos e limpeza emocional", 
     toneType: ToneType.MONAURAL, 
-    settings: { freq1: 396, freq2: 398 } 
+    settings: { frequency: 396 } 
   },
   { 
     id: 'astralProjectionThetaIso', 
     name: "Projeção Astral (Theta Isocrônicos)", 
     description: "Estados alterados de consciência", 
     toneType: ToneType.ISOCHRONIC, 
-    settings: { carrierFreq: 100, pulseFreq: 4.5 } 
+    settings: { frequency: 100, modulationFrequency: 4.5, modulationDepth: 60, carrierVolume: 0.7 } 
   },
   { 
     id: 'healingGeneralIso', 
     name: "Cura Geral (432Hz Isocrônicos)", 
     description: "Harmonização e cura energética", 
     toneType: ToneType.ISOCHRONIC, 
-    settings: { carrierFreq: 432, pulseFreq: 10 } 
+    settings: { frequency: 432, modulationFrequency: 10, modulationDepth: 40, carrierVolume: 0.8 } 
   }
 ];

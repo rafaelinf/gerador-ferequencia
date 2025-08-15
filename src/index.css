@@ -48,4 +48,217 @@
   .input-range::-moz-range-thumb {
     @apply w-4 h-4 bg-violet-500 rounded-full cursor-pointer border-0;
   }
+
+  /* Drag & Drop styles */
+  .drag-over {
+    @apply border-violet-500 bg-violet-500/10;
+  }
+
+  .drag-over .upload-icon {
+    @apply text-violet-400;
+  }
+
+  .drag-over .upload-text {
+    @apply text-violet-300;
+  }
+
+  /* Tab animations */
+  .tab-content {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  /* Progress bar animations */
+  .progress-bar {
+    transition: width 0.3s ease-out;
+  }
+
+  /* Button hover effects */
+  .btn-primary {
+    @apply bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-gray-800;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800;
+  }
+
+  .btn-success {
+    @apply bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-gray-800;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-800;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-gray-700/50 rounded-lg p-4 border border-gray-600/30;
+  }
+
+  .card-header {
+    @apply text-lg font-medium text-gray-200 mb-4 flex items-center;
+  }
+
+  .card-content {
+    @apply space-y-4;
+  }
+
+  /* Form styles */
+  .form-group {
+    @apply space-y-2;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-gray-300;
+  }
+
+  .form-input {
+    @apply w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent;
+  }
+
+  .form-input:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /* Status indicators */
+  .status-success {
+    @apply text-emerald-400;
+  }
+
+  .status-warning {
+    @apply text-yellow-400;
+  }
+
+  .status-error {
+    @apply text-red-400;
+  }
+
+  .status-info {
+    @apply text-blue-400;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-gray-300 border-t-violet-500;
+  }
+
+  /* File upload area */
+  .upload-area {
+    @apply border-2 border-dashed border-gray-600 rounded-lg p-6 text-center transition-all duration-200;
+  }
+
+  .upload-area:hover {
+    @apply border-violet-500 bg-violet-500/5;
+  }
+
+  .upload-area.drag-over {
+    @apply border-violet-500 bg-violet-500/10;
+  }
+
+  /* Audio player controls */
+  .audio-controls {
+    @apply flex items-center space-x-3 bg-gray-800 p-3 rounded-lg;
+  }
+
+  .control-button {
+    @apply p-2 rounded-full transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800;
+  }
+
+  .control-button.play {
+    @apply bg-violet-600 text-white hover:bg-violet-700 focus:ring-violet-500;
+  }
+
+  .control-button.stop {
+    @apply bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500;
+  }
+
+  .control-button.pause {
+    @apply bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500;
+  }
+
+  /* Volume slider */
+  .volume-control {
+    @apply flex items-center space-x-2;
+  }
+
+  .volume-slider {
+    @apply flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer;
+  }
+
+  .volume-slider::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 bg-violet-500 rounded-full cursor-pointer;
+  }
+
+  .volume-slider::-moz-range-thumb {
+    @apply w-4 h-4 bg-violet-500 rounded-full cursor-pointer border-0;
+  }
+
+  /* Progress bar */
+  .progress-container {
+    @apply w-full bg-gray-600 rounded-full h-2 overflow-hidden;
+  }
+
+  .progress-bar {
+    @apply h-2 bg-violet-500 transition-all duration-300 ease-out;
+  }
+
+  /* Responsive grid */
+  .responsive-grid {
+    @apply grid gap-4;
+  }
+
+  @screen sm {
+    .responsive-grid {
+      @apply grid-cols-2;
+    }
+  }
+
+  @screen lg {
+    .responsive-grid {
+      @apply grid-cols-3;
+    }
+  }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
 }
